@@ -1,0 +1,36 @@
+# Render "Blueprint" - lets you deploy the backend via "New + Blueprint" in
+# the Render dashboard instead of configuring the service by hand.
+# This is optional convenience; the manual setup steps in DEPLOYMENT.md
+# work identically without this file.
+services:
+  - type: web
+    name: centre-bill-tracker-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: DB_SSL_REJECT_UNAUTHORIZED
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: CLIENT_ORIGIN
+        sync: false
