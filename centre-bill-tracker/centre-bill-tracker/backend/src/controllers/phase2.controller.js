@@ -279,6 +279,7 @@ const downloadAttachment = asyncHandler(async (req, res) => {
   if (!rows.length) throw ApiError.notFound('Invoice attachment not found.');
   const file = rows[0];
   const safeName = file.original_filename.replace(/[\r\n"\\]/g, '_');
+  await writeAuditLog({ billId: Number(req.params.id), actorUserId: req.user.id, action: 'invoice.downloaded', entityType: 'bill_attachment', entityId: req.params.attachmentId, details: { filename: file.original_filename, mimeType: file.mime_type } });
   res.setHeader('Content-Type', file.mime_type);
   res.setHeader('Content-Length', file.file_size);
   res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
@@ -420,6 +421,7 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
     row.reconciliation_status, row.remarks, row.recorded_by,
   ])].map((row) => row.map(escapeCsv).join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  await writeAuditLog({ actorUserId: req.user.id, action: 'report.exported', entityType: 'report', entityId: 'payments-csv', details: { rows: rows.length } });
   res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-payments.csv"');
   return res.status(200).send(`\uFEFF${lines.join('\r\n')}`);
 });
@@ -454,6 +456,7 @@ const exportBillReportCsv = asyncHandler(async (req, res) => {
     row.approval_status,
   ])].map((row) => row.map(escapeCsv).join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  await writeAuditLog({ actorUserId: req.user.id, action: 'report.exported', entityType: 'report', entityId: 'bills-csv', details: { rows: rows.length } });
   res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-report.csv"');
   return res.status(200).send(`\uFEFF${lines.join('\r\n')}`);
 });
