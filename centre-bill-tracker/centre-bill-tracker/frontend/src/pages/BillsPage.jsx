@@ -12,6 +12,7 @@ import BillForm from '../components/bill/BillForm';
 import BillTable from '../components/bill/BillTable';
 import BillFinancePanel from '../components/bill/BillFinancePanel';
 import * as billApi from '../api/bill.api';
+import * as phase2Api from '../api/phase2.api';
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -25,6 +26,7 @@ export default function BillsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
   const [financeBill, setFinanceBill] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [statusChange, setStatusChange] = useState(null);
   const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState('');
@@ -58,6 +60,24 @@ export default function BillsPage() {
     await loadBills(search, statusFilter);
   };
 
+  const exportPayments = async () => {
+    setIsExporting(true);
+    setLoadError('');
+    try {
+      const response = await phase2Api.exportPaymentsCsv();
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'centre-bill-payments.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setLoadError(err.message || 'Could not export payment report.');
+    } finally { setIsExporting(false); }
+  };
+
   const confirmStatusChange = async () => {
     if (!statusChange) return;
     setIsStatusSubmitting(true);
@@ -80,7 +100,7 @@ export default function BillsPage() {
             <option value="">All Statuses</option><option value="Pending">Pending</option><option value="Received">Received</option><option value="Paid">Paid</option>
           </Select>
         </div>
-        <Button onClick={openAddForm}>+ Add Bill</Button>
+        <div className="flex gap-2"><Button variant="secondary" disabled={isExporting} onClick={exportPayments}>Export Payments CSV</Button><Button onClick={openAddForm}>+ Add Bill</Button></div>
       </div>
       <div className="mb-4"><Alert variant="error">{loadError}</Alert></div>
       {isLoading ? <Loader label="Loading bills..." /> : (
@@ -93,7 +113,7 @@ export default function BillsPage() {
       </Modal>
       <Modal isOpen={!!financeBill} onClose={() => setFinanceBill(null)}
         title={financeBill ? `Bill Finance — ${financeBill.invoiceNumber}` : 'Bill Finance'} size="lg">
-        {financeBill && <BillFinancePanel bill={financeBill} />}
+        {financeBill && <BillFinancePanel bill={financeBill} isAdmin={isAdmin} />}
       </Modal>
       <ConfirmDialog isOpen={!!statusChange} onClose={() => setStatusChange(null)} onConfirm={confirmStatusChange}
         isLoading={isStatusSubmitting}
