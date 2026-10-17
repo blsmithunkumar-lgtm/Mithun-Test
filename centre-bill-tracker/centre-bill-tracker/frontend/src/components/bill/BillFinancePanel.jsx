@@ -8,11 +8,17 @@ const METHODS = ['Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Othe
 const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value || 0));
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function BillFinancePanel({ bill }) {
+export default function BillFinancePanel({ bill, isAdmin }) {
   const [items, setItems] = useState(CATEGORIES.map((category) => ({ category, amount: '0.00' })));
   const [summary, setSummary] = useState({ billAmount: Number(bill.amount), amountPaid: 0, tdsAmount: 0, settledAmount: 0, outstandingBalance: Number(bill.amount) });
   const [payments, setPayments] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [amortization, setAmortization] = useState([]);
+  const [amortizationMonths, setAmortizationMonths] = useState('3');
+  const [startMonth, setStartMonth] = useState(today().slice(0, 7));
+  const [approval, setApproval] = useState(null);
+  const [requestNote, setRequestNote] = useState('');
+  const [reviewNote, setReviewNote] = useState('');
   const [payment, setPayment] = useState({
     paymentDate: today(), amountPaid: '', tdsAmount: '0', paymentMethod: 'Bank Transfer',
     transactionReference: '', reconciliationStatus: 'Pending', remarks: '',
@@ -25,10 +31,12 @@ export default function BillFinancePanel({ bill }) {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [breakdown, paymentData, attachmentData] = await Promise.all([
+      const [breakdown, paymentData, attachmentData, amortizationData, approvalData] = await Promise.all([
         phase2Api.getBreakdown(bill.id),
         phase2Api.getPayments(bill.id),
         phase2Api.getAttachments(bill.id),
+        phase2Api.getAmortization(bill.id),
+        phase2Api.getApproval(bill.id),
       ]);
       setItems(CATEGORIES.map((category) => {
         const found = breakdown.items.find((item) => item.category === category);
@@ -37,6 +45,8 @@ export default function BillFinancePanel({ bill }) {
       setPayments(paymentData.payments);
       setSummary(paymentData.summary);
       setAttachments(attachmentData.attachments);
+      setAmortization(amortizationData.schedule);
+      setApproval(approvalData.approval);
     } catch (err) {
       setError(err.message || 'Unable to load bill finance details.');
     }
@@ -101,6 +111,34 @@ export default function BillFinancePanel({ bill }) {
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) { setError(err.message || 'Unable to open invoice.'); }
+  };
+
+
+  const saveAmortization = async (event) => {
+    event.preventDefault(); setBusy(true); setError(''); setNotice('');
+    try {
+      await phase2Api.saveAmortization(bill.id, Number(amortizationMonths), startMonth);
+      setNotice('Prepaid amortization schedule saved.'); await load();
+    } catch (err) { setError(err.message || 'Could not save amortization schedule.'); }
+    finally { setBusy(false); }
+  };
+
+  const submitApprovalRequest = async (event) => {
+    event.preventDefault(); setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await phase2Api.requestApproval(bill.id, requestNote);
+      setApproval(result.approval); setNotice('Approval request submitted.');
+    } catch (err) { setError(err.message || 'Could not submit approval request.'); }
+    finally { setBusy(false); }
+  };
+
+  const reviewApproval = async (status) => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await phase2Api.reviewApproval(bill.id, status, reviewNote);
+      setApproval(result.approval); setNotice(`Bill ${status.toLowerCase()}.`);
+    } catch (err) { setError(err.message || 'Could not update approval.'); }
+    finally { setBusy(false); }
   };
 
   const categoryTotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
