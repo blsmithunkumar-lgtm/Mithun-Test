@@ -144,8 +144,8 @@ const updateBillStatus = asyncHandler(async (req, res) => {
     );
   }
 
-  if (requestedStatus === 'Paid' && req.user.role !== 'Admin') {
-    throw ApiError.forbidden('Only an Admin can mark a bill as Paid.');
+  if (requestedStatus === 'Paid') {
+    throw ApiError.badRequest('Record payments in the Finance panel; a bill is marked Paid when payments plus TDS settle the total.');
   }
 
   // payment_date is only ever populated by this server-side rule, never
