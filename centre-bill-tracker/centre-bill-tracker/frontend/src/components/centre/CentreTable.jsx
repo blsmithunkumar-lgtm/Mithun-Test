@@ -20,6 +20,8 @@ export default function CentreTable({ centres, isAdmin, onEdit, onToggleStatus, 
               <th className="px-4 py-3 font-medium">Vendor</th>
               <th className="px-4 py-3 font-medium">WiFi ID</th>
               <th className="px-4 py-3 font-medium">Account Number</th>
+              <th className="px-4 py-3 font-medium">Service Type</th>
+              <th className="px-4 py-3 font-medium">Contract Expiry</th>
               <th className="px-4 py-3 font-medium">Status</th>
               {isAdmin && <th className="px-4 py-3 font-medium text-right">Actions</th>}
             </tr>
@@ -31,6 +33,8 @@ export default function CentreTable({ centres, isAdmin, onEdit, onToggleStatus, 
                 <td className="px-4 py-3 text-ink-500">{centre.vendorName || '—'}</td>
                 <td className="px-4 py-3 text-ink-500">{centre.wifiId || '—'}</td>
                 <td className="px-4 py-3 text-ink-500">{centre.accountNumber || '—'}</td>
+                <td className="px-4 py-3 text-ink-500">{centre.serviceType || '—'}</td>
+                <td className="px-4 py-3 text-ink-500">{centre.contractExpiryDate ? String(centre.contractExpiryDate).slice(0, 10) : '—'}</td>
                 <td className="px-4 py-3">
                   <Badge tone={centre.status === 'Active' ? 'active' : 'inactive'} dot>
                     {centre.status}
