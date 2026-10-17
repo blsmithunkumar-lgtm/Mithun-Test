@@ -182,8 +182,13 @@ const createPayment = asyncHandler(async (req, res) => {
       'SELECT COALESCE(SUM(amount_paid + tds_amount), 0) AS settled FROM bill_payments WHERE bill_id = ?',
       [billId],
     );
-    const settled = Number(totals[0].settled);
-    if (settled + paid + tds > Number(existingRows[0].amount) + 0.01) {
+    // Compare integer paise, not floating-point rupees with a tolerance.
+    // A one-paise shortfall must never silently mark a bill as fully paid.
+    const settledCents = Math.round(Number(totals[0].settled) * 100);
+    const billCents = Math.round(Number(existingRows[0].amount) * 100);
+    const paymentCents = Math.round(paid * 100);
+    const tdsCents = Math.round(tds * 100);
+    if (settledCents + paymentCents + tdsCents > billCents) {
       throw ApiError.badRequest('Payment plus TDS cannot exceed the bill outstanding balance.');
     }
     const [result] = await connection.execute(
@@ -195,8 +200,8 @@ const createPayment = asyncHandler(async (req, res) => {
         String(transactionReference).trim() || null, reconciliationStatus, String(remarks).trim() || null, req.user.id],
     );
     paymentId = result.insertId;
-    const newSettled = settled + paid + tds;
-    if (newSettled >= Number(existingRows[0].amount) - 0.01) {
+    const newSettledCents = settledCents + paymentCents + tdsCents;
+    if (newSettledCents >= billCents) {
       if (req.user.role !== 'Admin') {
         throw ApiError.forbidden('Only an Admin can record the final payment that marks a bill Paid.');
       }
