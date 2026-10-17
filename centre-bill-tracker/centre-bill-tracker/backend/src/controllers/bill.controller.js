@@ -1,5 +1,6 @@
 const billModel = require('../models/bill.model');
 const { pool } = require('../config/db');
+const { writeAuditLog } = require('../utils/auditLog');
 const centreModel = require('../models/centre.model');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
@@ -80,6 +81,7 @@ const createBill = asyncHandler(async (req, res) => {
     createdBy: req.user.id,
   });
 
+  await writeAuditLog({ billId: bill.id, actorUserId: req.user.id, action: 'bill.created', entityType: 'bill', entityId: bill.id, details: { invoiceNumber, amount: Number(amount), centreId, billMonth: billMonthLabel } });
   return new ApiResponse(201, { bill: toApiShape(bill) }, 'Bill created successfully').send(res);
 });
 
@@ -132,6 +134,7 @@ const updateBill = asyncHandler(async (req, res) => {
     [req.user.id, id],
   );
 
+  await writeAuditLog({ billId: id, actorUserId: req.user.id, action: 'bill.updated', entityType: 'bill', entityId: id, details: { invoiceNumber, amount: Number(amount), centreId, billMonth: billMonthLabel } });
   return new ApiResponse(200, { bill: toApiShape(updated) }, 'Bill updated successfully').send(res);
 });
 
@@ -169,6 +172,7 @@ const updateBillStatus = asyncHandler(async (req, res) => {
   const paymentDate = requestedStatus === 'Paid' ? new Date().toISOString().slice(0, 10) : null;
   const updated = await billModel.updateStatus(id, requestedStatus, paymentDate);
 
+  await writeAuditLog({ billId: id, actorUserId: req.user.id, action: 'bill.status_changed', entityType: 'bill', entityId: id, details: { from: currentStatus, to: requestedStatus } });
   return new ApiResponse(200, { bill: toApiShape(updated) }, `Bill marked as ${requestedStatus}`).send(res);
 });
 
