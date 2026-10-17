@@ -420,7 +420,7 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   ])].map((row) => row.map(escapeCsv).join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-payments.csv"');
-  return res.status(200).send(`\\uFEFF${lines.join('\r\n')}`);
+  return res.status(200).send(`\uFEFF${lines.join('\r\n')}`);
 });
 
 
