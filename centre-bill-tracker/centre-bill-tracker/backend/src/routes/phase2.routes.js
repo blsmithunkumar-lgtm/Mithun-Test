@@ -16,6 +16,7 @@ const upload = multer({
 
 router.use(authenticate);
 router.get('/reports/payments.csv', phase2Controller.exportPaymentsCsv);
+router.get('/reports/bills.csv', phase2Controller.exportBillReportCsv);
 router.get('/bills/:id/breakdown', phase2Controller.getBreakdown);
 router.put('/bills/:id/breakdown', phase2Controller.saveBreakdown);
 router.get('/bills/:id/payments', phase2Controller.listPayments);
@@ -26,6 +27,7 @@ router.get('/bills/:id/attachments/:attachmentId', phase2Controller.downloadAtta
 router.get('/bills/:id/amortization', phase2Controller.getAmortization);
 router.put('/bills/:id/amortization', phase2Controller.saveAmortization);
 router.get('/bills/:id/approval', phase2Controller.getApproval);
+router.get('/bills/:id/audit', requireRole('Admin'), phase2Controller.listBillAuditLogs);
 router.post('/bills/:id/approval', phase2Controller.requestApproval);
 router.patch('/bills/:id/approval', requireRole('Admin'), phase2Controller.reviewApproval);
 
