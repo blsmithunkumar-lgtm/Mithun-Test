@@ -8,7 +8,7 @@ const PAYMENT_METHODS = ['Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque
 const RECONCILIATION = ['Pending', 'Matched', 'Mismatch'];
 
 async function requireBill(id) {
-  const [rows] = await pool.execute('SELECT id, amount FROM bills WHERE id = ?', [id]);
+  const [rows] = await pool.execute('SELECT id, amount, bill_status FROM bills WHERE id = ?', [id]);
   if (!rows.length) throw ApiError.notFound('Bill not found.');
   return rows[0];
 }
@@ -114,7 +114,7 @@ const listPayments = asyncHandler(async (req, res) => {
     summary: {
       ...summary,
       billAmount: Number(bill.amount),
-      outstandingBalance: Math.max(0, Number(bill.amount) - summary.settledAmount),
+      outstandingBalance: bill.bill_status === 'Paid' ? 0 : Math.max(0, Number(bill.amount) - summary.settledAmount),
     },
   }).send(res);
 });
