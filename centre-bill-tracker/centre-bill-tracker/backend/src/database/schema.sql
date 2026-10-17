@@ -34,8 +34,10 @@ CREATE TABLE IF NOT EXISTS centres (
   centre_name     VARCHAR(200) NOT NULL,
   vendor_name     VARCHAR(200) NULL,
   wifi_id         VARCHAR(150) NULL,
-  account_number  VARCHAR(150) NULL,
-  status          ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+  account_number       VARCHAR(150) NULL,
+  service_type         ENUM('Firewall', 'Leased Line', 'Broadband', 'Managed Service') NULL,
+  status               ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+  contract_expiry_date DATE NULL,
   created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT uq_centres_account_number UNIQUE (account_number)
