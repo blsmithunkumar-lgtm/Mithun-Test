@@ -411,7 +411,9 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   );
   const columns = ['Centre','Invoice Number','Bill Month','Bill Amount','Payment Date','Bank Amount Paid','TDS Withheld','Payment Method','Transaction Reference','Reconciliation Status','Remarks','Recorded By'];
   const escapeCsv = (value) => {
-    const text = value === null || value === undefined ? '' : String(value);
+    let text = value === null || value === undefined ? '' : String(value);
+    // CSV quoting alone does not prevent spreadsheet formula execution.
+    if (/^[\u0000-\u0020]*[=+@-]/.test(text)) text = "'" + text;
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [columns, ...rows.map((row) => [
