@@ -228,6 +228,12 @@ const uploadAttachment = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('Choose a PDF or image file to upload.');
   const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
   if (!allowed.includes(req.file.mimetype)) throw ApiError.badRequest('Only PDF, JPG, PNG, or WEBP invoices are supported.');
+  const bytes = req.file.buffer;
+  const signatureValid = req.file.mimetype === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-'
+    : req.file.mimetype === 'image/jpeg' ? bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      : req.file.mimetype === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+        : bytes.length >= 12 && bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP';
+  if (!signatureValid) throw ApiError.badRequest('The uploaded file content does not match its file type.');
   const [result] = await pool.execute(
     `INSERT INTO bill_attachments
      (bill_id, original_filename, mime_type, file_size, file_data, uploaded_by)
