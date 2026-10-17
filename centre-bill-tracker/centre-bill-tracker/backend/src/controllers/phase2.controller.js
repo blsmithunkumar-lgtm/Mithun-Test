@@ -158,6 +158,13 @@ const createPayment = asyncHandler(async (req, res) => {
     if (existingRows[0].bill_status !== 'Received') {
       throw ApiError.badRequest('Mark the bill as Received before recording a payment.');
     }
+    const [approvalRows] = await connection.execute(
+      'SELECT approval_status FROM bill_approvals WHERE bill_id = ?',
+      [billId],
+    );
+    if (!approvalRows.length || approvalRows[0].approval_status !== 'Approved') {
+      throw ApiError.badRequest('The bill must be approved before recording a payment.');
+    }
     const [totals] = await connection.execute(
       'SELECT COALESCE(SUM(amount_paid + tds_amount), 0) AS settled FROM bill_payments WHERE bill_id = ?',
       [billId],
