@@ -314,6 +314,6 @@ produces a static `dist/` folder) — deploy that folder anywhere, keeping
 an SPA rewrite rule (`frontend/vercel.json` is Vercel-specific; other
 hosts have their own equivalent "redirect all routes to index.html" setting).
 
-**Custom domain (optional, whenever you're ready):** Both Vercel and
-Render support attaching a custom domain directly in their dashboards once
-you purchase one — no application code changes required either way.
+**Custom domain (optional, whenever you're ready):** Vercel supports attaching
+a custom domain in the project dashboard once you purchase one — no application
+code changes required, but update the frontend API URL and backend CORS allowlist.
