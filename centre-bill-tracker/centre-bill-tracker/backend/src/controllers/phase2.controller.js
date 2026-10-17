@@ -149,9 +149,15 @@ const createPayment = asyncHandler(async (req, res) => {
   try {
     await connection.beginTransaction();
     const [existingRows] = await connection.execute(
-      'SELECT id, amount FROM bills WHERE id = ? FOR UPDATE', [billId],
+      'SELECT id, amount, bill_status FROM bills WHERE id = ? FOR UPDATE', [billId],
     );
     if (!existingRows.length) throw ApiError.notFound('Bill not found.');
+    if (existingRows[0].bill_status === 'Paid') {
+      throw ApiError.badRequest('This bill is already marked Paid.');
+    }
+    if (existingRows[0].bill_status !== 'Received') {
+      throw ApiError.badRequest('Mark the bill as Received before recording a payment.');
+    }
     const [totals] = await connection.execute(
       'SELECT COALESCE(SUM(amount_paid + tds_amount), 0) AS settled FROM bill_payments WHERE bill_id = ?',
       [billId],
