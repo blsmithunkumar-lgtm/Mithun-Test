@@ -11,6 +11,8 @@ const centreSchema = z.object({
   vendorName: z.string().trim().max(200, 'Max 200 characters').optional(),
   wifiId: z.string().trim().max(150, 'Max 150 characters').optional(),
   accountNumber: z.string().trim().max(150, 'Max 150 characters').optional(),
+  serviceType: z.enum(['', 'Firewall', 'Leased Line', 'Broadband', 'Managed Service']).optional(),
+  contractExpiryDate: z.string().optional(),
 });
 
 export default function CentreForm({ initialValues, onSubmit, onCancel }) {
@@ -23,7 +25,7 @@ export default function CentreForm({ initialValues, onSubmit, onCancel }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(centreSchema),
-    defaultValues: initialValues || { centreName: '', vendorName: '', wifiId: '', accountNumber: '' },
+    defaultValues: initialValues || { centreName: '', vendorName: '', wifiId: '', accountNumber: '', serviceType: '', contractExpiryDate: '' },
   });
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export default function CentreForm({ initialValues, onSubmit, onCancel }) {
   const submitHandler = async (values) => {
     setServerError('');
     try {
-      await onSubmit(values);
+      await onSubmit({ ...values, serviceType: values.serviceType || null, contractExpiryDate: values.contractExpiryDate || null });
     } catch (err) {
       setServerError(err.message || 'Something went wrong. Please try again.');
     }
@@ -70,6 +72,30 @@ export default function CentreForm({ initialValues, onSubmit, onCancel }) {
         placeholder="ISP account number"
         error={errors.accountNumber?.message}
         {...register('accountNumber')}
+      />
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="serviceType" className="text-sm font-medium text-ink-700">Service Type</label>
+        <select
+          id="serviceType"
+          className="w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-ink-900"
+          {...register('serviceType')}
+        >
+          <option value="">Select service type</option>
+          <option value="Firewall">Firewall</option>
+          <option value="Leased Line">Leased Line</option>
+          <option value="Broadband">Broadband</option>
+          <option value="Managed Service">Managed Service</option>
+        </select>
+        {errors.serviceType?.message && <p className="text-xs text-status-overdue">{errors.serviceType.message}</p>}
+      </div>
+
+      <Input
+        id="contractExpiryDate"
+        label="Contract / Lease Expiry Date"
+        type="date"
+        error={errors.contractExpiryDate?.message}
+        {...register('contractExpiryDate')}
       />
 
       <div className="mt-2 flex justify-end gap-2">
