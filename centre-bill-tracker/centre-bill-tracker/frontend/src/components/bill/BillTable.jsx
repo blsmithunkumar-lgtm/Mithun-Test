@@ -63,11 +63,6 @@ export default function BillTable({ bills, isAdmin, onEdit, onAdvanceStatus, onF
                           Mark Received
                         </Button>
                       )}
-                      {bill.billStatus === 'Received' && isAdmin && (
-                        <Button size="sm" variant="primary" onClick={() => onAdvanceStatus(bill, 'Paid')}>
-                          Mark Paid
-                        </Button>
-                      )}
                     </div>
                   </td>
                 </tr>
