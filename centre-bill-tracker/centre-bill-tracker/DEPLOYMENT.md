@@ -6,19 +6,19 @@ purchase required**:
 
 | Component | Service | Why |
 |---|---|---|
-| Frontend  | **Vercel** (Hobby/free plan) | Free static hosting, HTTPS, global CDN |
-| Backend   | **Render** (free Web Service) | Free Node.js hosting, HTTPS, auto-deploy from Git |
+| Frontend  | **Vercel** | Static hosting, HTTPS, global CDN |
+| Backend   | **Vercel** (Node.js Function) | Serverless API deployment from Git |
 | Database  | **TiDB Cloud Starter** (free plan) | Genuinely free indefinitely (no card, no expiry), MySQL wire-compatible, works unchanged with the `mysql2` driver already used in this project |
 
 Everything is environment-variable-driven — no code changes are needed to
 move between local development, this free setup, and paid hosting later.
 
-> **A note on Vercel's terms:** Vercel's Hobby plan is intended for
-> personal/non-commercial projects. It works perfectly for the V1
-> development-and-testing phase described here, but if this becomes a
-> permanent tool the company relies on day-to-day, plan to move the
-> frontend to Vercel Pro (or another host) at that point — the deployment
-> steps below are identical either way, only the plan changes.
+> **Current deployment note:** The Centre Bill Tracker frontend and backend
+> are deployed as separate Vercel projects. The backend project uses
+> `backend/vercel.json` and routes requests to `backend/api/index.js`.
+> Keep the frontend API URL and backend CORS allowlist aligned with the
+> actual production domains. Confirm current plan limits and suitability in
+> Vercel before relying on the app for business-critical daily operations.
 
 ---
 
@@ -172,11 +172,11 @@ database storage as attachments accumulate.
 Nothing is hardcoded anywhere in the codebase — every credential, URL, and
 secret is read from environment variables.
 
-### Backend (`backend/.env` locally, or Render's Environment tab in production)
+### Backend (`backend/.env` locally, or the backend Vercel project's Environment Variables in production)
 
 | Variable | Example (production) | Notes |
 |---|---|---|
-| `PORT` | *(leave unset)* | Render injects this automatically |
+| `PORT` | *(normally leave unset)* | Vercel manages the function's listening port |
 | `NODE_ENV` | `production` | |
 | `DB_HOST` | `gateway01.ap-southeast-1.prod.aws.tidbcloud.com` | From TiDB Cloud |
 | `DB_PORT` | `4000` | TiDB Cloud's MySQL port |
@@ -195,7 +195,7 @@ secret is read from environment variables.
 
 | Variable | Example (production) | Notes |
 |---|---|---|
-| `VITE_API_BASE_URL` | `https://your-backend.onrender.com/api` | Your deployed Render URL + `/api` |
+| `VITE_API_BASE_URL` | `https://mithun-test.vercel.app/api` | Use the actual backend production URL + `/api`; verify the configured value in the frontend project's environment settings. |
 
 **Never commit `.env` files** — both `backend/.gitignore` and
 `frontend/.gitignore` already exclude them. Only `.env.example` (no real
@@ -203,41 +203,35 @@ secrets) is committed.
 
 ---
 
-## 3. Backend Deployment (Render)
+## 3. Backend Deployment (Vercel)
 
-1. Push this project to a GitHub (or GitLab/Bitbucket) repository.
-2. In Render, click **New +** → **Web Service** → connect your repository.
-3. Configure:
-   - **Root Directory**: `backend`
-   - **Runtime**: Node
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Instance Type**: Free
-4. Add all backend environment variables from the table above under the
-   **Environment** tab.
-5. Deploy. Render gives you a URL like `https://centre-bill-tracker-api.onrender.com`.
-6. Verify it's alive: visit `https://<your-render-url>/health` — should
-   return `{"success":true,"message":"Centre Bill Tracker API is running"}`.
-7. Run the seed script once, from your local machine, pointed at the
-   production database (use the same `DB_*` values you put in Render):
-   ```bash
-   cd backend
-   npm install
-   npm run seed
-   ```
-   (Or temporarily run `npm run seed` from Render's dashboard Shell tab,
-   then close it — either works.)
+The production backend is a separate Vercel project. Preserve its existing
+project configuration when updating deployments; do not create a duplicate
+project merely to follow this guide.
 
-**Alternative:** the included `render.yaml` at the project root lets you use
-Render's **New +** → **Blueprint** flow instead of manual setup — it
-pre-fills the build/start commands and generates `JWT_SECRET` for you; you
-still fill in the `DB_*` and `CLIENT_ORIGIN` values yourself.
+1. Open the existing backend project in Vercel (currently named `mithun-test`).
+2. Confirm its Root Directory points to the backend application directory
+   (`centre-bill-tracker/centre-bill-tracker/backend` if the repository root
+   is selected as the project root). If the project already uses a different
+   valid root setting, document and preserve that working configuration.
+3. Confirm the project uses the committed `backend/vercel.json`, which maps
+   `api/index.js` to the Vercel Node.js runtime and rewrites requests to it.
+4. Configure the backend variables from the table above under
+   **Settings → Environment Variables**, scoped to Production as appropriate.
+   Never copy secret values into Git, chat, issue comments, or logs.
+5. Deploy through the existing Git integration and verify
+   `https://mithun-test.vercel.app/health` returns
+   `{"success":true,"message":"Centre Bill Tracker API is running"}`.
+6. Check **Runtime Logs** for the production deployment when validating
+   database connectivity. Build logs only confirm build-time activity; an
+   empty runtime-log view is not proof that the database is connected.
+7. Run database seed operations only when explicitly needed and approved.
+   Use a trusted local environment with authorized database credentials;
+   do not seed production casually or rely on a Render dashboard Shell.
 
-**Free tier behavior to expect:** the service spins down after 15 minutes
-of no traffic and takes 30–60 seconds to wake up on the next request. For 4
-internal users, this just means the first request of the day (or after a
-break) is slow — nothing to fix, just expected free-tier behavior. It goes
-away automatically the moment you upgrade to a paid Render instance.
+Do not use the health response alone as proof of database persistence. Confirm
+that a non-financial test record can be created, refreshed, and reopened before
+calling the production database integration verified.
 
 ---
 
@@ -261,18 +255,17 @@ away automatically the moment you upgrade to a paid Render instance.
 
 ## 5. Connect the Frontend and Backend (CORS)
 
-1. Go back to Render → your backend service → Environment tab.
-2. Set `CLIENT_ORIGIN` to your actual Vercel URL, e.g.
-   `https://centre-bill-tracker.vercel.app` (no trailing slash). If you
-   also want to keep testing from `localhost:5173`, use a comma-separated
-   list: `https://centre-bill-tracker.vercel.app,http://localhost:5173`.
+1. Open the backend Vercel project → **Settings → Environment Variables**.
+2. Set `CLIENT_ORIGIN` to the actual frontend production URL (no trailing
+   slash). Add a comma-separated list only if additional origins are genuinely
+   required, for example a local development origin.
 3. Save — Render redeploys automatically. The backend only accepts requests
    from origins listed here (see `backend/src/app.js`); anything else is
    rejected by CORS.
 
 ## 6. Final Verification Checklist
 
-- [ ] `https://<render-url>/health` returns success
+- [ ] `https://mithun-test.vercel.app/health` returns success
 - [ ] Visiting the Vercel URL shows the login page
 - [ ] Logging in with the seeded Admin account works and reaches the Dashboard
 - [ ] Logging in with the seeded Operations account works, and management
@@ -280,7 +273,7 @@ away automatically the moment you upgrade to a paid Render instance.
 - [ ] Adding a centre and a bill from the deployed app persists correctly
       (refresh the page — data should still be there, confirming it's
       reading from the cloud database, not local state)
-- [ ] Direct-loading a deep link, e.g. `https://<vercel-url>/bills`, and
+- [ ] Direct-loading a deep link, e.g. `https://<your-frontend-vercel-url>/bills`, and
       refreshing the page both work without a 404
 
 ---
@@ -299,7 +292,7 @@ To migrate:
 3. Export/import existing data with `mysqldump` (works against TiDB Cloud
    too, since it's MySQL wire-compatible).
 4. Update `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` /
-   `DB_SSL` in Render's environment variables. No code changes.
+   `DB_SSL` in the backend Vercel project's environment variables. No code changes.
 
 **Backend:** Any Node.js host works (Render paid tier, Railway, a VPS,
 AWS/GCP/Azure). Because config is entirely environment-variable-driven:
