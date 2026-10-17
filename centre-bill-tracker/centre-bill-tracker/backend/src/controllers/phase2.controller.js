@@ -86,7 +86,7 @@ const saveBreakdown = asyncHandler(async (req, res) => {
       `UPDATE bill_approvals SET approval_status = 'Pending', reviewed_by = NULL,
           request_note = 'Bill bifurcation changed; review again.', review_note = NULL,
           requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL
-        WHERE bill_id = ? AND approval_status = 'Approved'`,
+        WHERE bill_id = ?`,
       [billId],
     );
     await connection.commit();
