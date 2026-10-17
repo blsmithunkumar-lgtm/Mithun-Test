@@ -69,6 +69,12 @@ const saveBreakdown = asyncHandler(async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const [existingPayments] = await connection.execute(
+      'SELECT COUNT(*) AS total FROM bill_payments WHERE bill_id = ?', [billId],
+    );
+    if (Number(existingPayments[0].total) > 0) {
+      throw ApiError.conflict('Bill bifurcation cannot be changed after payments have been recorded.');
+    }
     for (const item of normalized) {
       await connection.execute(
         `INSERT INTO bill_items (bill_id, category, amount) VALUES (?, ?, ?)
@@ -76,6 +82,13 @@ const saveBreakdown = asyncHandler(async (req, res) => {
         [billId, item.category, item.amount],
       );
     }
+    await connection.execute(
+      `UPDATE bill_approvals SET approval_status = 'Pending', reviewed_by = NULL,
+          request_note = 'Bill bifurcation changed; review again.', review_note = NULL,
+          requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL
+        WHERE bill_id = ? AND approval_status = 'Approved'`,
+      [billId],
+    );
     await connection.commit();
   } catch (error) {
     await connection.rollback();
