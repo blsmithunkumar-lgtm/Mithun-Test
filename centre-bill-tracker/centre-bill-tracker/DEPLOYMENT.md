@@ -57,6 +57,37 @@ TiDB Cloud tier or a different MySQL host is a connection-string change only
 
 ---
 
+
+## 1A. Phase 2 database migration (existing installations)
+
+For an existing database, do **not** re-run the full schema file over live data.
+After reviewing and approving the Phase 2 release, back up the database and
+apply this additive migration to the existing `centre_bill_tracker` database:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase2_billing_payments_invoices.sql;
+```
+
+The migration creates the bill category, payment, invoice attachment,
+prepaid amortization, and approval tables. It is designed to be re-runnable.
+The GitHub Actions migration smoke test verifies the tables can be created
+twice against a temporary MySQL database. It does **not** run against production.
+
+Phase 2 payment workflow:
+1. Mark the bill as **Received**.
+2. Submit an approval request in the Finance panel.
+3. An Admin approves or rejects the request.
+4. Once approved, record bank payments and any TDS withheld. Partial payments
+   are supported; the bill becomes **Paid** only when bank payments plus TDS
+   settle the bill total. The final settlement must be recorded by an Admin.
+5. The Finance panel also supports invoice files (PDF/JPG/PNG/WEBP, max 4 MB),
+   bill bifurcation, 3- or 6-month prepaid amortization, and payment CSV export.
+
+TDS is recorded as an explicit amount; the app does not assume a tax rate or
+taxable base. Confirm the applicable accounting treatment before entering it.
+Invoice files are stored in the database in this initial version, so monitor
+database storage as attachments accumulate.
+
 ## 2. Environment Variable Configuration
 
 Nothing is hardcoded anywhere in the codebase — every credential, URL, and
@@ -166,7 +197,7 @@ away automatically the moment you upgrade to a paid Render instance.
 - [ ] Visiting the Vercel URL shows the login page
 - [ ] Logging in with the seeded Admin account works and reaches the Dashboard
 - [ ] Logging in with the seeded Operations account works, and management
-      actions (Add Centre, Edit Bill, Mark Paid) are correctly hidden/blocked
+      actions (Add Centre and Edit Bill) are correctly hidden/blocked, and payment settlement requires an approved bill plus the payment ledger
 - [ ] Adding a centre and a bill from the deployed app persists correctly
       (refresh the page — data should still be there, confirming it's
       reading from the cloud database, not local state)
