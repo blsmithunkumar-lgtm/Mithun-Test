@@ -126,3 +126,33 @@ CREATE TABLE IF NOT EXISTS bill_attachments (
   CONSTRAINT fk_bill_attachments_bill FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
   CONSTRAINT fk_bill_attachments_user FOREIGN KEY (uploaded_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE IF NOT EXISTS bill_amortizations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bill_id INT NOT NULL,
+  amortization_month CHAR(7) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  created_by INT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_bill_amortization_bill_month (bill_id, amortization_month),
+  CONSTRAINT fk_bill_amortizations_bill FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+  CONSTRAINT fk_bill_amortizations_user FOREIGN KEY (created_by) REFERENCES users(id),
+  CONSTRAINT chk_bill_amortizations_amount CHECK (amount >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS bill_approvals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bill_id INT NOT NULL,
+  approval_status ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
+  requested_by INT NOT NULL,
+  reviewed_by INT NULL,
+  request_note VARCHAR(1000) NULL,
+  review_note VARCHAR(1000) NULL,
+  requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at TIMESTAMP NULL,
+  UNIQUE KEY uq_bill_approvals_bill (bill_id),
+  CONSTRAINT fk_bill_approvals_bill FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
+  CONSTRAINT fk_bill_approvals_requester FOREIGN KEY (requested_by) REFERENCES users(id),
+  CONSTRAINT fk_bill_approvals_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
