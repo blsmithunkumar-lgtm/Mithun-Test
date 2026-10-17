@@ -223,6 +223,7 @@ const createPayment = asyncHandler(async (req, res) => {
     [paymentId],
   );
   const p = rows[0];
+  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'payment.recorded', entityType: 'bill_payment', entityId: paymentId, details: { amountPaid: Number(p.amount_paid), tdsAmount: Number(p.tds_amount), paymentDate: p.payment_date, paymentMethod: p.payment_method } });
   return new ApiResponse(201, {
     payment: {
       id: p.id, paymentDate: p.payment_date, amountPaid: Number(p.amount_paid),
@@ -453,7 +454,7 @@ const exportBillReportCsv = asyncHandler(async (req, res) => {
   ])].map((row) => row.map(escapeCsv).join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-report.csv"');
-  return res.status(200).send(`\uFEFF${lines.join('\\r\\n')}`);
+  return res.status(200).send(`\uFEFF${lines.join('\r\n')}`);
 });
 
 const listBillAuditLogs = asyncHandler(async (req, res) => {
