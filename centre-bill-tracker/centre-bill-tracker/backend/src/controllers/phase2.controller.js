@@ -388,7 +388,6 @@ const requestApproval = asyncHandler(async (req, res) => {
     [billId, req.user.id, requestNote || null],
   );
   await writeAuditLog({ billId, actorUserId: req.user.id, action: 'approval.requested', entityType: 'bill_approval', entityId: billId, details: { requestNote: requestNote || null } });
-  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'approval.reviewed', entityType: 'bill_approval', entityId: billId, details: { status, reviewNote: String(reviewNote).trim() || null } });
   return getApproval(req, res);
 });
 
@@ -407,6 +406,7 @@ const reviewApproval = asyncHandler(async (req, res) => {
     [status, req.user.id, String(reviewNote).trim() || null, billId],
   );
   if (!result.affectedRows) throw ApiError.conflict('No pending approval request exists for this bill.');
+  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'approval.reviewed', entityType: 'bill_approval', entityId: billId, details: { status, reviewNote: String(reviewNote).trim() || null } });
   return getApproval(req, res);
 });
 
