@@ -73,6 +73,20 @@ prepaid amortization, and approval tables. It is designed to be re-runnable.
 The GitHub Actions migration smoke test verifies the tables can be created
 twice against a temporary MySQL database. It does **not** run against production.
 
+Phase 3 audit trail migration:
+After Phase 2 is released and the Phase 3 PR is approved, back up the database
+and apply the additive audit migration to the existing `centre_bill_tracker`
+database:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase3_audit_logs.sql;
+```
+
+The Admin Finance panel shows the most recent 200 audit events for a bill.
+The bill CSV report includes bank payments, TDS withheld, outstanding balance,
+and approval status. Audit event writes are best-effort: failed inserts are
+written to backend logs and do not roll back the business action.
+
 Phase 2 payment workflow:
 1. Mark the bill as **Received**.
 2. Submit an approval request in the Finance panel.
