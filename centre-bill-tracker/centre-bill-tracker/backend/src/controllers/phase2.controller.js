@@ -177,6 +177,9 @@ const createPayment = asyncHandler(async (req, res) => {
     paymentId = result.insertId;
     const newSettled = settled + paid + tds;
     if (newSettled >= Number(existingRows[0].amount) - 0.01) {
+      if (req.user.role !== 'Admin') {
+        throw ApiError.forbidden('Only an Admin can record the final payment that marks a bill Paid.');
+      }
       await connection.execute(
         `UPDATE bills SET bill_status = 'Paid', payment_date = ? WHERE id = ? AND bill_status <> 'Paid'`,
         [paymentDate, billId],
