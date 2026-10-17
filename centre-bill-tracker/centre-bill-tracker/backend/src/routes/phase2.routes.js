@@ -8,7 +8,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024, files: 1 },
   fileFilter(req, file, callback) {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
     // Let the controller return a consistent 400 response for unsupported MIME types.
     return callback(null, true);
   },
