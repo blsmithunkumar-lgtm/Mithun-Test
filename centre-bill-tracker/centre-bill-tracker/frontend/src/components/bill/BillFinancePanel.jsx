@@ -96,7 +96,6 @@ export default function BillFinancePanel({ bill }) {
       link.href = url;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.download = attachment.filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
