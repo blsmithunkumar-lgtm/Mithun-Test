@@ -227,7 +227,7 @@ project merely to follow this guide.
    empty runtime-log view is not proof that the database is connected.
 7. Run database seed operations only when explicitly needed and approved.
    Use a trusted local environment with authorized database credentials;
-   do not seed production casually or rely on a Render dashboard Shell.
+   do not seed production casually or rely on a hosting dashboard Shell.
 
 Do not use the health response alone as proof of database persistence. Confirm
 that a non-financial test record can be created, refreshed, and reopened before
@@ -237,19 +237,22 @@ calling the production database integration verified.
 
 ## 4. Frontend Deployment (Vercel)
 
-1. In Vercel, click **Add New** → **Project** → import the same repository.
-2. Configure:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: Vite (auto-detected)
-   - **Build Command**: `npm run build` (default)
-   - **Output Directory**: `dist` (default)
-3. Add the environment variable `VITE_API_BASE_URL` pointing at your Render
-   backend URL (with `/api` at the end), e.g.
-   `https://centre-bill-tracker-api.onrender.com/api`.
-4. Deploy. Vercel gives you a URL like `https://centre-bill-tracker.vercel.app`.
-5. `frontend/vercel.json` (already included) rewrites all routes to
-   `index.html`, so React Router's client-side routes (e.g. `/bills`,
-   `/dashboard`) work correctly on direct load and on refresh.
+The frontend is already deployed as a separate Vercel project. Update that
+existing project rather than creating a duplicate.
+
+1. Open the existing frontend project in Vercel (currently named
+   `mithun-test-ltzp`).
+2. Preserve its working Root Directory and Vite build settings. If configuring
+   from the repository root, the frontend directory is
+   `centre-bill-tracker/centre-bill-tracker/frontend`.
+3. In **Settings → Environment Variables**, set `VITE_API_BASE_URL` to the
+   backend production URL followed by `/api`, currently expected to be
+   `https://mithun-test.vercel.app/api`. Verify the live value in Vercel
+   without copying it into chat or source control.
+4. Redeploy the frontend after changing environment variables.
+5. Confirm `frontend/vercel.json` rewrites client-side routes to
+   `index.html`, so routes such as `/bills` and `/dashboard` load and
+   refresh without a 404.
 
 ---
 
@@ -259,9 +262,9 @@ calling the production database integration verified.
 2. Set `CLIENT_ORIGIN` to the actual frontend production URL (no trailing
    slash). Add a comma-separated list only if additional origins are genuinely
    required, for example a local development origin.
-3. Save — Render redeploys automatically. The backend only accepts requests
-   from origins listed here (see `backend/src/app.js`); anything else is
-   rejected by CORS.
+3. Save the variable and redeploy the backend if Vercel does not automatically
+   create a new deployment. The backend only accepts requests from origins
+   listed here (see `backend/src/app.js`); anything else is rejected by CORS.
 
 ## 6. Final Verification Checklist
 
@@ -294,7 +297,7 @@ To migrate:
 4. Update `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` /
    `DB_SSL` in the backend Vercel project's environment variables. No code changes.
 
-**Backend:** Any Node.js host works (Render paid tier, Railway, a VPS,
+**Backend:** Any Node.js host works (Vercel, Railway, a VPS,
 AWS/GCP/Azure). Because config is entirely environment-variable-driven:
 1. Deploy the same `backend/` folder with `npm install && npm start`.
 2. Set the same environment variables listed in section 2.
