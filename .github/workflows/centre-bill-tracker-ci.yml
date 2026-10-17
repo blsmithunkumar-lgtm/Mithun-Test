@@ -2,7 +2,7 @@ name: Centre Bill Tracker CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'phase2/**']
     paths:
       - 'centre-bill-tracker/centre-bill-tracker/**'
       - '.github/workflows/centre-bill-tracker-ci.yml'
