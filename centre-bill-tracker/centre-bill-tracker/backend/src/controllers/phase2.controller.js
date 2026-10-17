@@ -410,8 +410,9 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   );
   const columns = ['Centre','Invoice Number','Bill Month','Bill Amount','Payment Date','Bank Amount Paid','TDS Withheld','Payment Method','Transaction Reference','Reconciliation Status','Remarks','Recorded By'];
   const escapeCsv = (value) => {
-    const text = value === null || value === undefined ? '' : String(value);
-    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    let text = value === null || value === undefined ? '' : String(value);
+    if (/^[=+@-]/.test(text)) text = \`'\${text}\`;
+    return /[",\r\n]/.test(text) ? \`"\${text.replace(/"/g, '""')}"\` : text;
   };
   const lines = [columns, ...rows.map((row) => [
     row.centre_name, row.invoice_number, row.bill_month, row.bill_amount, row.payment_date,
