@@ -139,4 +139,4 @@ jobs:
         env:
           MYSQL_PWD: test-password
         run: |
-          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME IN ('bill_items','bill_payments','bill_attachments')")" = "3"
+          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME IN ('bill_items','bill_payments','bill_attachments','bill_amortizations','bill_approvals')")" = "5"
