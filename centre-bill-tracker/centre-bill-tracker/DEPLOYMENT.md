@@ -58,6 +58,85 @@ TiDB Cloud tier or a different MySQL host is a connection-string change only
 ---
 
 
+## 1B. Production release gate (mandatory)
+
+Do not merge Phase 2 or Phase 3 to production until every gate below is complete.
+A successful GitHub Actions run uses a temporary MySQL database and is **not**
+evidence that the production schema has been changed or that production data
+can be saved and reopened.
+
+### Gate A — identify the actual production database
+
+1. Confirm the production backend deployment and the exact database host/name
+   from the hosting provider's environment settings. Do not copy credentials
+   into Git, chat, CI logs, or a ticket.
+2. Confirm the DB account can read the current schema and has permission to
+   create the new tables. If access is denied, stop and restore authorized
+   owner access first; do not work around access controls.
+
+### Gate B — create and verify a private backup
+
+Run from a trusted machine with the MySQL client tools installed. Set
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in the
+local shell from the hosting provider's secure settings. Do not paste values
+into commands or commit them. Store the backup outside the repository in an
+encrypted, access-controlled location.
+
+```bash
+set -eu
+umask 077
+BACKUP_FILE="$HOME/centre-bill-tracker-$(date -u +%Y%m%dT%H%M%SZ).sql"
+MYSQL_PWD="$DB_PASSWORD" mysqldump \
+  --host="$DB_HOST" --port="${DB_PORT:-4000}" --user="$DB_USER" \
+  --ssl-mode=VERIFY_IDENTITY --single-transaction \
+  --routines --triggers --events "$DB_NAME" > "$BACKUP_FILE"
+test -s "$BACKUP_FILE"
+grep -q 'CREATE TABLE' "$BACKUP_FILE"
+sha256sum "$BACKUP_FILE"
+```
+
+For providers that require a specific CA certificate, add the provider's
+documented CA option. Do not treat a non-empty file alone as a full restore
+test: confirm the backup contains the expected existing tables and perform a
+restore test into a separate, non-production database before release.
+
+### Gate C — apply additive migrations in order
+
+After the backup and restore test succeed, apply the Phase 2 migration first:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase2_billing_payments_invoices.sql;
+```
+
+Verify all five tables exist: `bill_items`, `bill_payments`,
+`bill_attachments`, `bill_amortizations`, and `bill_approvals`.
+Then deploy Phase 2 and test with a designated test bill/user before real
+finance transactions. Do not use a real bill to test payments.
+
+Only after Phase 2 is verified, approved, and deployed, apply Phase 3:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase3_audit_logs.sql;
+```
+
+Verify `bill_audit_logs` and both indexes exist, then deploy Phase 3.
+
+### Gate D — production smoke test and recovery
+
+Using an authorized test account and a non-financial test bill, verify:
+- login and role permissions work;
+- bill details save, refresh, and reopen from the database;
+- breakdown total validation and approval flow work;
+- payment/TDS arithmetic rejects overpayment and does not mark a bill Paid
+  until the exact invoice total is settled;
+- invoice upload/download, report CSV, and audit history work;
+- no database errors appear in backend logs.
+
+If a deployment fails, restore the previous application deployment first.
+These migrations are additive; do not drop the new tables as an ad-hoc rollback.
+Keep the private database backup until the new version has been verified and
+the agreed retention period has elapsed.
+
 ## 1A. Phase 2 database migration (existing installations)
 
 For an existing database, do **not** re-run the full schema file over live data.
