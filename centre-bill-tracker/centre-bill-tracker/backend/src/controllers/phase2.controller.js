@@ -49,21 +49,24 @@ const saveBreakdown = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Provide exactly one amount for each bill category.');
   }
   const seen = new Set();
-  let total = 0;
+  let totalCents = 0;
   const normalized = items.map((item) => {
     if (!CATEGORIES.includes(item.category) || seen.has(item.category)) {
       throw ApiError.badRequest('Bill categories must be unique and valid.');
     }
     seen.add(item.category);
     const amount = Number(item.amount);
-    if (!Number.isFinite(amount) || amount < 0 || Math.round(amount * 100) !== amount * 100) {
+    const amountCents = Math.round(amount * 100);
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(amountCents)
+      || Math.abs((amount * 100) - amountCents) > 1e-7) {
       throw ApiError.badRequest('Each category amount must be a non-negative amount with up to two decimals.');
     }
-    total += amount;
-    return { category: item.category, amount: amount.toFixed(2) };
+    totalCents += amountCents;
+    return { category: item.category, amount: (amountCents / 100).toFixed(2) };
   });
-  if (Math.abs(total - Number(bill.amount)) > 0.01) {
-    throw ApiError.badRequest(`Category total (${total.toFixed(2)}) must equal bill total (${Number(bill.amount).toFixed(2)}).`);
+  const billCents = Math.round(Number(bill.amount) * 100);
+  if (totalCents !== billCents) {
+    throw ApiError.badRequest(`Category total (${(totalCents / 100).toFixed(2)}) must equal bill total (${(billCents / 100).toFixed(2)}).`);
   }
 
   const connection = await pool.getConnection();
