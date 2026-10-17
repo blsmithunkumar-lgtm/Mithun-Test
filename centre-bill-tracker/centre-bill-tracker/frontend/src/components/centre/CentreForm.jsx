@@ -11,8 +11,8 @@ const centreSchema = z.object({
   vendorName: z.string().trim().max(200, 'Max 200 characters').optional(),
   wifiId: z.string().trim().max(150, 'Max 150 characters').optional(),
   accountNumber: z.string().trim().max(150, 'Max 150 characters').optional(),
-  serviceType: z.enum(['', 'Firewall', 'Leased Line', 'Broadband', 'Managed Service']).optional(),
-  contractExpiryDate: z.string().optional(),
+  serviceType: z.union([z.enum(['', 'Firewall', 'Leased Line', 'Broadband', 'Managed Service']), z.null()]).optional(),
+  contractExpiryDate: z.union([z.string(), z.null()]).optional(),
 });
 
 export default function CentreForm({ initialValues, onSubmit, onCancel }) {
