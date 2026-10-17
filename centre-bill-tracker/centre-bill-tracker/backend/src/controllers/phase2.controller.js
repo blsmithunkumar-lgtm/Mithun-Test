@@ -289,7 +289,7 @@ const saveAmortization = asyncHandler(async (req, res) => {
   const months = Number(req.body.months);
   const startMonth = String(req.body.startMonth || '');
   if (![3, 6].includes(months)) throw ApiError.badRequest('Prepaid amortization must be scheduled over 3 or 6 months.');
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(startMonth)) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startMonth)) {
     throw ApiError.badRequest('Choose a valid start month in YYYY-MM format.');
   }
 
@@ -391,7 +391,7 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   const columns = ['Centre','Invoice Number','Bill Month','Bill Amount','Payment Date','Bank Amount Paid','TDS Withheld','Payment Method','Transaction Reference','Reconciliation Status','Remarks','Recorded By'];
   const escapeCsv = (value) => {
     const text = value === null || value === undefined ? '' : String(value);
-    return /[",\\r\\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [columns, ...rows.map((row) => [
     row.centre_name, row.invoice_number, row.bill_month, row.bill_amount, row.payment_date,
@@ -400,7 +400,7 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   ])].map((row) => row.map(escapeCsv).join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-payments.csv"');
-  return res.status(200).send(`\\uFEFF${lines.join('\\r\\n')}`);
+  return res.status(200).send(`\\uFEFF${lines.join('\r\n')}`);
 });
 
 module.exports = { getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
