@@ -148,10 +148,14 @@ const createPayment = asyncHandler(async (req, res) => {
   }
   const paid = Number(amountPaid);
   const tds = Number(tdsAmount);
-  if (!Number.isFinite(paid) || paid <= 0 || Math.round(paid * 100) !== paid * 100) {
+  const paidCents = Math.round(paid * 100);
+  const tdsCentsInput = Math.round(tds * 100);
+  if (!Number.isFinite(paid) || paid <= 0 || !Number.isSafeInteger(paidCents)
+    || Math.abs((paid * 100) - paidCents) > 1e-7) {
     throw ApiError.badRequest('Payment amount must be positive and have up to two decimals.');
   }
-  if (!Number.isFinite(tds) || tds < 0 || Math.round(tds * 100) !== tds * 100) {
+  if (!Number.isFinite(tds) || tds < 0 || !Number.isSafeInteger(tdsCentsInput)
+    || Math.abs((tds * 100) - tdsCentsInput) > 1e-7) {
     throw ApiError.badRequest('TDS amount must be non-negative and have up to two decimals.');
   }
   if (!PAYMENT_METHODS.includes(paymentMethod)) throw ApiError.badRequest('Invalid payment method.');
