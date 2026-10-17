@@ -444,7 +444,7 @@ const exportBillReportCsv = asyncHandler(async (req, res) => {
     `SELECT c.centre_name, b.invoice_number, b.bill_month, b.invoice_date, b.due_date,
             b.amount AS bill_amount, b.bill_status,
             COALESCE(p.bank_paid, 0) AS bank_paid, COALESCE(p.tds_withheld, 0) AS tds_withheld,
-            GREATEST(b.amount - COALESCE(p.settled, 0), 0) AS outstanding,
+            CASE WHEN b.bill_status = 'Paid' THEN 0 ELSE GREATEST(b.amount - COALESCE(p.settled, 0), 0) END AS outstanding,
             COALESCE(a.approval_status, 'Not requested') AS approval_status
        FROM bills b
        JOIN centres c ON c.id = b.centre_id
