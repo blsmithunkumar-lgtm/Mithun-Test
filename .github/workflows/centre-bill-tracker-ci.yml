@@ -7,7 +7,7 @@ on:
       - 'centre-bill-tracker/centre-bill-tracker/**'
       - '.github/workflows/centre-bill-tracker-ci.yml'
   push:
-    branches: [main, 'phase1/**', 'phase2/**']
+    branches: [main, 'phase1/**', 'phase2/**', 'phase3/**']
     paths:
       - 'centre-bill-tracker/centre-bill-tracker/**'
       - '.github/workflows/centre-bill-tracker-ci.yml'
@@ -140,3 +140,15 @@ jobs:
           MYSQL_PWD: test-password
         run: |
           test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME IN ('bill_items','bill_payments','bill_attachments','bill_amortizations','bill_approvals')")" = "5"
+      - name: Apply Phase 3 audit migration twice
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          mysql -h 127.0.0.1 -uroot phase2_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_phase3_audit_logs.sql
+          mysql -h 127.0.0.1 -uroot phase2_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_phase3_audit_logs.sql
+      - name: Verify audit log table and indexes
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME='bill_audit_logs'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME='bill_audit_logs' AND INDEX_NAME IN ('idx_bill_audit_logs_bill_created','idx_bill_audit_logs_actor_created')")" = "2"
