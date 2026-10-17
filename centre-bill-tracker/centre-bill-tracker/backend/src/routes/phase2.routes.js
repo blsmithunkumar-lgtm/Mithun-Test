@@ -9,7 +9,7 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024, files: 1 },
   fileFilter(req, file, callback) {
     const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.mimetype)) return callback(new Error('Only PDF, JPG, PNG, or WEBP invoices are supported.'));
+    // Let the controller return a consistent 400 response for unsupported MIME types.
     return callback(null, true);
   },
 });
