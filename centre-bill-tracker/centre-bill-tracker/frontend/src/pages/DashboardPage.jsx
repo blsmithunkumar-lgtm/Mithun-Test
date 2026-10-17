@@ -36,6 +36,7 @@ const ICONS = {
 export default function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [latestBills, setLatestBills] = useState([]);
+  const [financeSummary, setFinanceSummary] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isLoadingBills, setIsLoadingBills] = useState(true);
   const [error, setError] = useState('');
@@ -44,12 +45,14 @@ export default function DashboardPage() {
     const load = async () => {
       setError('');
       try {
-        const [summaryData, billsData] = await Promise.all([
+        const [summaryData, billsData, financeData] = await Promise.all([
           dashboardApi.getSummary().finally(() => setIsLoadingSummary(false)),
           dashboardApi.getLatestBills().finally(() => setIsLoadingBills(false)),
+          dashboardApi.getFinanceSummary(),
         ]);
         setSummary(summaryData);
         setLatestBills(billsData);
+        setFinanceSummary(financeData);
       } catch (err) {
         setError(err.message || 'Failed to load dashboard data.');
       }
@@ -82,6 +85,16 @@ export default function DashboardPage() {
           icon={ICONS.overdue}
           isLoading={isLoadingSummary}
         />
+      </div>
+
+      <div className="mt-6">
+        <h2 className="mb-3 font-display text-base font-semibold text-ink-900">Finance Overview</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard label="Outstanding Balance" value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(financeSummary?.totalOutstanding ?? 0)} tone="pending" icon={ICONS.pending} isLoading={!financeSummary} />
+          <SummaryCard label="Bank Payments Recorded" value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(financeSummary?.totalBankPaid ?? 0)} tone="received" icon={ICONS.received} isLoading={!financeSummary} />
+          <SummaryCard label="TDS Withheld" value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(financeSummary?.totalTdsWithheld ?? 0)} tone="neutral" icon={ICONS.received} isLoading={!financeSummary} />
+          <SummaryCard label="Bills Awaiting Approval" value={financeSummary?.awaitingApproval ?? 0} tone="dueSoon" icon={ICONS.dueSoon} isLoading={!financeSummary} />
+        </div>
       </div>
 
       <div className="mt-6">
