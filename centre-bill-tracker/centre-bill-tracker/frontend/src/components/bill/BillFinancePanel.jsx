@@ -175,7 +175,7 @@ export default function BillFinancePanel({ bill, isAdmin }) {
 
       <section className="rounded-lg border border-surface-border p-4">
         <h3 className="mb-3 font-display font-semibold text-ink-900">Record payment</h3>
-        <p className="mb-3 text-xs text-ink-500">Enter the bank amount and TDS separately. Both count toward settling the invoice; no TDS rate is assumed.</p>
+        <p className="mb-3 text-xs text-ink-500">Enter the bank amount and TDS separately. Both count toward settling the invoice; no TDS rate is assumed. The bill must be approved before payment entry is enabled.</p>
         <form onSubmit={submitPayment} className="grid gap-3 sm:grid-cols-2">
           <Field label="Payment date"><input type="date" required value={payment.paymentDate} onChange={(e) => setPayment({ ...payment, paymentDate: e.target.value })} /></Field>
           <Field label="Bank amount paid (₹)"><input type="number" min="0.01" step="0.01" required value={payment.amountPaid} onChange={(e) => setPayment({ ...payment, amountPaid: e.target.value })} /></Field>
@@ -184,7 +184,7 @@ export default function BillFinancePanel({ bill, isAdmin }) {
           <Field label="Transaction reference"><input maxLength="120" value={payment.transactionReference} onChange={(e) => setPayment({ ...payment, transactionReference: e.target.value })} /></Field>
           <Field label="Bank reconciliation"><select value={payment.reconciliationStatus} onChange={(e) => setPayment({ ...payment, reconciliationStatus: e.target.value })}><option>Pending</option><option>Matched</option><option>Mismatch</option></select></Field>
           <div className="sm:col-span-2"><Field label="Remarks"><input maxLength="1000" value={payment.remarks} onChange={(e) => setPayment({ ...payment, remarks: e.target.value })} /></Field></div>
-          <div className="sm:col-span-2"><Button type="submit" disabled={busy || summary.outstandingBalance <= 0}>Record payment</Button></div>
+          <div className="sm:col-span-2"><Button type="submit" disabled={busy || summary.outstandingBalance <= 0 || approval?.approval_status !== 'Approved'}>Record payment</Button></div>
         </form>
       </section>
 
