@@ -262,4 +262,138 @@ const downloadAttachment = asyncHandler(async (req, res) => {
   return res.status(200).send(file.file_data);
 });
 
-module.exports = { getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment };
+
+const getAmortization = asyncHandler(async (req, res) => {
+  const bill = await requireBill(req.params.id);
+  const [rows] = await pool.execute(
+    'SELECT id, amortization_month, amount FROM bill_amortizations WHERE bill_id = ? ORDER BY amortization_month',
+    [req.params.id],
+  );
+  return new ApiResponse(200, {
+    billId: Number(bill.id),
+    schedule: rows.map((row) => ({ id: row.id, month: row.amortization_month, amount: Number(row.amount) })),
+    total: Number(rows.reduce((sum, row) => sum + Number(row.amount), 0).toFixed(2)),
+  }).send(res);
+});
+
+const saveAmortization = asyncHandler(async (req, res) => {
+  const billId = Number(req.params.id);
+  const bill = await requireBill(billId);
+  const months = Number(req.body.months);
+  const startMonth = String(req.body.startMonth || '');
+  if (![3, 6].includes(months)) throw ApiError.badRequest('Prepaid amortization must be scheduled over 3 or 6 months.');
+  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(startMonth)) {
+    throw ApiError.badRequest('Choose a valid start month in YYYY-MM format.');
+  }
+
+  const totalCents = Math.round(Number(bill.amount) * 100);
+  const baseCents = Math.floor(totalCents / months);
+  const remainder = totalCents - (baseCents * months);
+  const [year, month] = startMonth.split('-').map(Number);
+  const schedule = Array.from({ length: months }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - 1 + index, 1));
+    return {
+      month: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+      amount: (baseCents + (index < remainder ? 1 : 0)) / 100,
+    };
+  });
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute('DELETE FROM bill_amortizations WHERE bill_id = ?', [billId]);
+    for (const entry of schedule) {
+      await connection.execute(
+        'INSERT INTO bill_amortizations (bill_id, amortization_month, amount, created_by) VALUES (?, ?, ?, ?)',
+        [billId, entry.month, entry.amount.toFixed(2), req.user.id],
+      );
+    }
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+  return getAmortization(req, res);
+});
+
+const getApproval = asyncHandler(async (req, res) => {
+  await requireBill(req.params.id);
+  const [rows] = await pool.execute(
+    `SELECT a.id, a.approval_status, a.request_note, a.review_note, a.requested_at, a.reviewed_at,
+            requester.full_name AS requested_by_name, reviewer.full_name AS reviewed_by_name
+       FROM bill_approvals a
+       JOIN users requester ON requester.id = a.requested_by
+       LEFT JOIN users reviewer ON reviewer.id = a.reviewed_by
+      WHERE a.bill_id = ?`,
+    [req.params.id],
+  );
+  return new ApiResponse(200, { approval: rows[0] || null }).send(res);
+});
+
+const requestApproval = asyncHandler(async (req, res) => {
+  const billId = Number(req.params.id);
+  await requireBill(billId);
+  const requestNote = String(req.body.requestNote || '').trim();
+  if (requestNote.length > 1000) throw ApiError.badRequest('Approval request note must be 1000 characters or fewer.');
+  const [existing] = await pool.execute('SELECT approval_status FROM bill_approvals WHERE bill_id = ?', [billId]);
+  if (existing.length && existing[0].approval_status === 'Approved') {
+    throw ApiError.conflict('This bill has already been approved.');
+  }
+  await pool.execute(
+    `INSERT INTO bill_approvals (bill_id, approval_status, requested_by, request_note)
+     VALUES (?, 'Pending', ?, ?)
+     ON DUPLICATE KEY UPDATE approval_status = 'Pending', requested_by = VALUES(requested_by),
+       reviewed_by = NULL, request_note = VALUES(request_note), review_note = NULL,
+       requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL`,
+    [billId, req.user.id, requestNote || null],
+  );
+  return getApproval(req, res);
+});
+
+const reviewApproval = asyncHandler(async (req, res) => {
+  if (req.user.role !== 'Admin') throw ApiError.forbidden('Only an Admin can approve or reject a bill.');
+  const billId = Number(req.params.id);
+  await requireBill(billId);
+  const { status, reviewNote = '' } = req.body;
+  if (!['Approved', 'Rejected'].includes(status)) {
+    throw ApiError.badRequest('Approval status must be Approved or Rejected.');
+  }
+  if (String(reviewNote).length > 1000) throw ApiError.badRequest('Review note must be 1000 characters or fewer.');
+  const [result] = await pool.execute(
+    `UPDATE bill_approvals SET approval_status = ?, reviewed_by = ?, review_note = ?, reviewed_at = CURRENT_TIMESTAMP
+      WHERE bill_id = ? AND approval_status = 'Pending'`,
+    [status, req.user.id, String(reviewNote).trim() || null, billId],
+  );
+  if (!result.affectedRows) throw ApiError.conflict('No pending approval request exists for this bill.');
+  return getApproval(req, res);
+});
+
+const exportPaymentsCsv = asyncHandler(async (req, res) => {
+  const [rows] = await pool.execute(
+    `SELECT c.centre_name, b.invoice_number, b.bill_month, b.amount AS bill_amount,
+            p.payment_date, p.amount_paid, p.tds_amount, p.payment_method,
+            p.transaction_reference, p.reconciliation_status, p.remarks, u.full_name AS recorded_by
+       FROM bill_payments p
+       JOIN bills b ON b.id = p.bill_id
+       JOIN centres c ON c.id = b.centre_id
+       JOIN users u ON u.id = p.created_by
+      ORDER BY p.payment_date DESC, p.id DESC`,
+  );
+  const columns = ['Centre','Invoice Number','Bill Month','Bill Amount','Payment Date','Bank Amount Paid','TDS Withheld','Payment Method','Transaction Reference','Reconciliation Status','Remarks','Recorded By'];
+  const escapeCsv = (value) => {
+    const text = value === null || value === undefined ? '' : String(value);
+    return /[",\\r\\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [columns, ...rows.map((row) => [
+    row.centre_name, row.invoice_number, row.bill_month, row.bill_amount, row.payment_date,
+    row.amount_paid, row.tds_amount, row.payment_method, row.transaction_reference,
+    row.reconciliation_status, row.remarks, row.recorded_by,
+  ])].map((row) => row.map(escapeCsv).join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-payments.csv"');
+  return res.status(200).send(`\\uFEFF${lines.join('\\r\\n')}`);
+});
+
+module.exports = { getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
