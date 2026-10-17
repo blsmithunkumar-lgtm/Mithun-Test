@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const { writeAuditLog } = require('../utils/auditLog');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
@@ -96,6 +97,7 @@ const saveBreakdown = asyncHandler(async (req, res) => {
   } finally {
     connection.release();
   }
+  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.breakdown_updated', entityType: 'bill_breakdown', entityId: billId, details: { categories: normalized } });
   return getBreakdown(req, res);
 });
 
@@ -261,6 +263,7 @@ const uploadAttachment = asyncHandler(async (req, res) => {
     [req.params.id, req.file.originalname.slice(0, 255), req.file.mimetype,
       req.file.size, req.file.buffer, req.user.id],
   );
+  await writeAuditLog({ billId: Number(req.params.id), actorUserId: req.user.id, action: 'invoice.uploaded', entityType: 'bill_attachment', entityId: result.insertId, details: { filename: req.file.originalname.slice(0, 255), mimeType: req.file.mimetype, fileSize: req.file.size } });
   return new ApiResponse(201, { attachment: {
     id: result.insertId, filename: req.file.originalname.slice(0, 255),
     mimeType: req.file.mimetype, fileSize: req.file.size,
@@ -335,6 +338,7 @@ const saveAmortization = asyncHandler(async (req, res) => {
   } finally {
     connection.release();
   }
+  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.amortization_updated', entityType: 'bill_amortization', entityId: billId, details: { months, startMonth, schedule } });
   return getAmortization(req, res);
 });
 
@@ -369,6 +373,8 @@ const requestApproval = asyncHandler(async (req, res) => {
        requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL`,
     [billId, req.user.id, requestNote || null],
   );
+  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'approval.requested', entityType: 'bill_approval', entityId: billId, details: { requestNote: requestNote || null } });
+  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'approval.reviewed', entityType: 'bill_approval', entityId: billId, details: { status, reviewNote: String(reviewNote).trim() || null } });
   return getApproval(req, res);
 });
 
@@ -416,4 +422,56 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   return res.status(200).send(`\\uFEFF${lines.join('\r\n')}`);
 });
 
-module.exports = { getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
+
+const exportBillReportCsv = asyncHandler(async (req, res) => {
+  const [rows] = await pool.execute(
+    `SELECT c.centre_name, b.invoice_number, b.bill_month, b.invoice_date, b.due_date,
+            b.amount AS bill_amount, b.bill_status,
+            COALESCE(p.bank_paid, 0) AS bank_paid, COALESCE(p.tds_withheld, 0) AS tds_withheld,
+            GREATEST(b.amount - COALESCE(p.settled, 0), 0) AS outstanding,
+            COALESCE(a.approval_status, 'Not requested') AS approval_status
+       FROM bills b
+       JOIN centres c ON c.id = b.centre_id
+       LEFT JOIN (
+         SELECT bill_id, SUM(amount_paid) AS bank_paid, SUM(tds_amount) AS tds_withheld,
+                SUM(amount_paid + tds_amount) AS settled
+           FROM bill_payments GROUP BY bill_id
+       ) p ON p.bill_id = b.id
+       LEFT JOIN bill_approvals a ON a.bill_id = b.id
+      ORDER BY b.bill_month DESC, c.centre_name, b.invoice_number`,
+  );
+  const columns = ['Centre','Invoice Number','Bill Month','Invoice Date','Due Date','Bill Amount','Bill Status','Bank Amount Paid','TDS Withheld','Outstanding','Approval Status'];
+  const escapeCsv = (value) => {
+    let text = value === null || value === undefined ? '' : String(value);
+    if (/^[=+@-]/.test(text)) text = `'${text}`;
+    return /[",\\r\\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [columns, ...rows.map((row) => [
+    row.centre_name, row.invoice_number, row.bill_month, row.invoice_date, row.due_date,
+    row.bill_amount, row.bill_status, row.bank_paid, row.tds_withheld, row.outstanding,
+    row.approval_status,
+  ])].map((row) => row.map(escapeCsv).join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-report.csv"');
+  return res.status(200).send(`\uFEFF${lines.join('\\r\\n')}`);
+});
+
+const listBillAuditLogs = asyncHandler(async (req, res) => {
+  const billId = Number(req.params.id);
+  await requireBill(billId);
+  const [rows] = await pool.execute(
+    `SELECT l.id, l.action, l.entity_type, l.entity_id, l.details, l.created_at,
+            u.full_name AS actor_name, u.username AS actor_username
+       FROM bill_audit_logs l
+       LEFT JOIN users u ON u.id = l.actor_user_id
+      WHERE l.bill_id = ? ORDER BY l.created_at DESC, l.id DESC LIMIT 200`,
+    [billId],
+  );
+  return new ApiResponse(200, { auditLogs: rows.map((row) => ({
+    id: row.id, action: row.action, entityType: row.entity_type, entityId: row.entity_id,
+    details: row.details, createdAt: row.created_at, actorName: row.actor_name || 'Deleted user',
+    actorUsername: row.actor_username,
+  })) }).send(res);
+});
+
+module.exports = { exportBillReportCsv, listBillAuditLogs, getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
