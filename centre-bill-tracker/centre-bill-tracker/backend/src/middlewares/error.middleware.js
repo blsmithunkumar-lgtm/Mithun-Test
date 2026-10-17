@@ -6,6 +6,10 @@ const env = require('../config/env');
  * instead of leaking raw driver messages to the client.
  */
 function mapKnownDbErrors(err) {
+  if (err.name === 'MulterError' && err.code === 'LIMIT_FILE_SIZE') {
+    return ApiError.badRequest('Invoice files must be 4 MB or smaller.');
+  }
+  if (err.name === 'MulterError') return ApiError.badRequest('Invoice upload could not be processed.');
   if (err.code === 'ER_DUP_ENTRY') {
     return ApiError.conflict('A record with the same unique value already exists.');
   }

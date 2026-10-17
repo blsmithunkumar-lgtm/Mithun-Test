@@ -8,7 +8,7 @@ const URGENCY_BORDER = {
   normal: 'border-l-transparent',
 };
 
-export default function BillTable({ bills, isAdmin, onEdit, onAdvanceStatus }) {
+export default function BillTable({ bills, isAdmin, onEdit, onAdvanceStatus, onFinance }) {
   if (bills.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-surface-border bg-white py-16 text-center">
@@ -49,23 +49,18 @@ export default function BillTable({ bills, isAdmin, onEdit, onAdvanceStatus }) {
                   <td className="px-4 py-3 text-ink-900">{formatAmount(bill.amount)}</td>
                   <td className="px-4 py-3"><StatusBadge status={bill.billStatus} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1">
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <button onClick={() => onFinance(bill)} className="rounded-lg px-2 py-1 text-xs font-medium text-brand-500 hover:bg-brand-50">
+                        Finance
+                      </button>
                       {isAdmin && (
-                        <button
-                          onClick={() => onEdit(bill)}
-                          className="rounded-lg px-2 py-1 text-xs font-medium text-brand-500 hover:bg-brand-50"
-                        >
+                        <button onClick={() => onEdit(bill)} className="rounded-lg px-2 py-1 text-xs font-medium text-brand-500 hover:bg-brand-50">
                           Edit
                         </button>
                       )}
                       {bill.billStatus === 'Pending' && (
                         <Button size="sm" variant="secondary" onClick={() => onAdvanceStatus(bill, 'Received')}>
                           Mark Received
-                        </Button>
-                      )}
-                      {bill.billStatus === 'Received' && isAdmin && (
-                        <Button size="sm" variant="primary" onClick={() => onAdvanceStatus(bill, 'Paid')}>
-                          Mark Paid
                         </Button>
                       )}
                     </div>

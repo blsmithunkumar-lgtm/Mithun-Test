@@ -1,4 +1,5 @@
 const billModel = require('../models/bill.model');
+const { pool } = require('../config/db');
 const centreModel = require('../models/centre.model');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
@@ -112,9 +113,24 @@ const updateBill = asyncHandler(async (req, res) => {
     throw ApiError.conflict(`A bill for "${centre.centre_name}" in ${billMonthLabel} already exists.`);
   }
 
+  const [existingPayments] = await pool.execute(
+    'SELECT COUNT(*) AS total FROM bill_payments WHERE bill_id = ?', [id],
+  );
+  if (Number(existingPayments[0].total) > 0) {
+    throw ApiError.conflict('A bill with recorded payments cannot be edited. Add a finance adjustment workflow instead.');
+  }
+
   const updated = await billModel.update(id, {
     centreId, billMonth: billMonthLabel, invoiceNumber, invoiceDate, dueDate, amount, remarks,
   });
+  await pool.execute(
+    `UPDATE bill_approvals
+        SET approval_status = 'Pending', requested_by = ?, reviewed_by = NULL,
+            request_note = 'Bill details changed; review again.', review_note = NULL,
+            requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL
+      WHERE bill_id = ?`,
+    [req.user.id, id],
+  );
 
   return new ApiResponse(200, { bill: toApiShape(updated) }, 'Bill updated successfully').send(res);
 });
@@ -144,8 +160,8 @@ const updateBillStatus = asyncHandler(async (req, res) => {
     );
   }
 
-  if (requestedStatus === 'Paid' && req.user.role !== 'Admin') {
-    throw ApiError.forbidden('Only an Admin can mark a bill as Paid.');
+  if (requestedStatus === 'Paid') {
+    throw ApiError.badRequest('Record payments in the Finance panel; a bill is marked Paid when payments plus TDS settle the total.');
   }
 
   // payment_date is only ever populated by this server-side rule, never
