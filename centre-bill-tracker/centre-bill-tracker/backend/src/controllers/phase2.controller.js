@@ -168,6 +168,7 @@ const createPayment = asyncHandler(async (req, res) => {
 
   const connection = await pool.getConnection();
   let paymentId;
+  let billMarkedPaid = false;
   try {
     await connection.beginTransaction();
     const [existingRows] = await connection.execute(
@@ -214,10 +215,12 @@ const createPayment = asyncHandler(async (req, res) => {
       if (req.user.role !== 'Admin') {
         throw ApiError.forbidden('Only an Admin can record the final payment that marks a bill Paid.');
       }
-      await connection.execute(
+      const [statusUpdate] = await connection.execute(
         `UPDATE bills SET bill_status = 'Paid', payment_date = ? WHERE id = ? AND bill_status <> 'Paid'`,
         [paymentDate, billId],
       );
+      if (!statusUpdate.affectedRows) throw ApiError.conflict('Bill status changed while recording the final payment.');
+      billMarkedPaid = true;
     }
     await connection.commit();
   } catch (error) {
@@ -236,6 +239,9 @@ const createPayment = asyncHandler(async (req, res) => {
   );
   const p = rows[0];
   await writeAuditLog({ billId, actorUserId: req.user.id, action: 'payment.recorded', entityType: 'bill_payment', entityId: paymentId, details: { amountPaid: Number(p.amount_paid), tdsAmount: Number(p.tds_amount), paymentDate: p.payment_date, paymentMethod: p.payment_method } });
+  if (billMarkedPaid) {
+    await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.status_changed', entityType: 'bill', entityId: billId, details: { from: 'Received', to: 'Paid', paymentId, paymentDate: p.payment_date } });
+  }
   return new ApiResponse(201, {
     payment: {
       id: p.id, paymentDate: p.payment_date, amountPaid: Number(p.amount_paid),
