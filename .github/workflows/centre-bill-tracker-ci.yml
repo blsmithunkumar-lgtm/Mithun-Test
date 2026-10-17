@@ -1,0 +1,96 @@
+name: Centre Bill Tracker CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'centre-bill-tracker/centre-bill-tracker/**'
+      - '.github/workflows/centre-bill-tracker-ci.yml'
+  push:
+    branches: [main, 'phase1/**']
+    paths:
+      - 'centre-bill-tracker/centre-bill-tracker/**'
+      - '.github/workflows/centre-bill-tracker-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend build and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: centre-bill-tracker/centre-bill-tracker/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: centre-bill-tracker/centre-bill-tracker/frontend/package.json
+      - run: npm install
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        working-directory: centre-bill-tracker/centre-bill-tracker/backend
+        run: |
+          find . -path './node_modules' -prune -o -name '*.js' -type f -print0 | xargs -0 -n1 node --check
+
+  database-migration:
+    name: Database migration smoke test (temporary MySQL)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: migration_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create legacy centres table
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          mysql -h 127.0.0.1 -uroot migration_test <<'SQL'
+          CREATE TABLE centres (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            centre_name VARCHAR(200) NOT NULL,
+            vendor_name VARCHAR(200) NULL,
+            wifi_id VARCHAR(150) NULL,
+            account_number VARCHAR(150) NULL,
+            status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+          INSERT INTO centres (centre_name) VALUES ('Migration smoke test');
+          SQL
+      - name: Apply migration and verify columns/data
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          mysql -h 127.0.0.1 -uroot migration_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_add_centre_service_expiry.sql
+          mysql -h 127.0.0.1 -uroot migration_test -e "SELECT service_type, contract_expiry_date FROM centres WHERE centre_name='Migration smoke test';"
+          test "$(mysql -h 127.0.0.1 -uroot migration_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='migration_test' AND TABLE_NAME='centres' AND COLUMN_NAME IN ('service_type','contract_expiry_date')")" = "2"
+      - name: Verify migration is re-runnable
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          mysql -h 127.0.0.1 -uroot migration_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_add_centre_service_expiry.sql
