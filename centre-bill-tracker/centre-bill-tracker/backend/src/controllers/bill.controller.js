@@ -128,7 +128,7 @@ const updateBill = asyncHandler(async (req, res) => {
         SET approval_status = 'Pending', requested_by = ?, reviewed_by = NULL,
             request_note = 'Bill details changed; review again.', review_note = NULL,
             requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL
-      WHERE bill_id = ? AND approval_status = 'Approved'`,
+      WHERE bill_id = ?`,
     [req.user.id, id],
   );
 
