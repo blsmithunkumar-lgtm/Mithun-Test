@@ -18,3 +18,10 @@ export const downloadAttachment = (billId, attachmentId) => axiosClient.get(
   `/phase2/bills/${billId}/attachments/${attachmentId}`,
   { responseType: 'blob' },
 );
+
+export const getAmortization = (billId) => unwrap(axiosClient.get(`/phase2/bills/${billId}/amortization`));
+export const saveAmortization = (billId, months, startMonth) => unwrap(axiosClient.put(`/phase2/bills/${billId}/amortization`, { months, startMonth }));
+export const getApproval = (billId) => unwrap(axiosClient.get(`/phase2/bills/${billId}/approval`));
+export const requestApproval = (billId, requestNote) => unwrap(axiosClient.post(`/phase2/bills/${billId}/approval`, { requestNote }));
+export const reviewApproval = (billId, status, reviewNote) => unwrap(axiosClient.patch(`/phase2/bills/${billId}/approval`, { status, reviewNote }));
+export const exportPaymentsCsv = () => axiosClient.get('/phase2/reports/payments.csv', { responseType: 'blob' });
