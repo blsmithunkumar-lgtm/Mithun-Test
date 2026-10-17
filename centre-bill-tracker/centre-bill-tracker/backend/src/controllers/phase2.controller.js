@@ -460,7 +460,7 @@ const exportBillReportCsv = asyncHandler(async (req, res) => {
   const escapeCsv = (value) => {
     let text = value === null || value === undefined ? '' : String(value);
     if (/^[\u0000-\u0020]*[=+@-]/.test(text)) text = "'" + text;
-    return /[",\\r\\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [columns, ...rows.map((row) => [
     row.centre_name, row.invoice_number, row.bill_month, row.invoice_date, row.due_date,
