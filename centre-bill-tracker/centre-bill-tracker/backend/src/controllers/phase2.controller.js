@@ -420,7 +420,7 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   const columns = ['Centre','Invoice Number','Bill Month','Bill Amount','Payment Date','Bank Amount Paid','TDS Withheld','Payment Method','Transaction Reference','Reconciliation Status','Remarks','Recorded By'];
   const escapeCsv = (value) => {
     let text = value === null || value === undefined ? '' : String(value);
-    if (/^[=+@-]/.test(text)) text = "'" + text;
+    if (/^[\u0000-\u0020]*[=+@-]/.test(text)) text = "'" + text;
     return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
   };
   const lines = [columns, ...rows.map((row) => [
@@ -455,7 +455,7 @@ const exportBillReportCsv = asyncHandler(async (req, res) => {
   const columns = ['Centre','Invoice Number','Bill Month','Invoice Date','Due Date','Bill Amount','Bill Status','Bank Amount Paid','TDS Withheld','Outstanding','Approval Status'];
   const escapeCsv = (value) => {
     let text = value === null || value === undefined ? '' : String(value);
-    if (/^[=+@-]/.test(text)) text = `'${text}`;
+    if (/^[\u0000-\u0020]*[=+@-]/.test(text)) text = "'" + text;
     return /[",\\r\\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   const lines = [columns, ...rows.map((row) => [
