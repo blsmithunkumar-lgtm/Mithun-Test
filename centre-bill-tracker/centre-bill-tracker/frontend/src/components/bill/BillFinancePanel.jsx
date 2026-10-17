@@ -198,6 +198,44 @@ export default function BillFinancePanel({ bill, isAdmin }) {
       </section>
 
       <section className="rounded-lg border border-surface-border p-4">
+        <h3 className="mb-3 font-display font-semibold text-ink-900">Prepaid amortization</h3>
+        <p className="mb-3 text-xs text-ink-500">Spread this bill evenly over 3 or 6 months. Any paise remainder is distributed so the schedule equals the bill total.</p>
+        <form onSubmit={saveAmortization} className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="block text-sm text-ink-700">Duration
+            <select value={amortizationMonths} onChange={(e) => setAmortizationMonths(e.target.value)} className="mt-1 block w-full rounded-lg border border-surface-border px-3 py-2"><option value="3">3 months</option><option value="6">6 months</option></select>
+          </label>
+          <label className="block text-sm text-ink-700">Start month
+            <input type="month" required value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="mt-1 block w-full rounded-lg border border-surface-border px-3 py-2" />
+          </label>
+          <Button type="submit" disabled={busy}>Generate schedule</Button>
+        </form>
+        {amortization.length > 0 ? <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-ink-500"><th className="py-2">Month</th><th className="py-2 text-right">Expense amount</th></tr></thead><tbody>{amortization.map((entry) => <tr key={entry.month} className="border-b border-surface-border"><td className="py-2">{entry.month}</td><td className="py-2 text-right">{money(entry.amount)}</td></tr>)}</tbody><tfoot><tr className="font-semibold"><td className="py-2">Total</td><td className="py-2 text-right">{money(amortization.reduce((sum, entry) => sum + Number(entry.amount), 0))}</td></tr></tfoot></table></div> : <p className="text-sm text-ink-500">No amortization schedule created.</p>}
+      </section>
+
+      <section className="rounded-lg border border-surface-border p-4">
+        <h3 className="mb-2 font-display font-semibold text-ink-900">Approval workflow</h3>
+        <p className="mb-3 text-sm text-ink-600">Current status: <strong>{approval?.approval_status || 'Not requested'}</strong></p>
+        {approval?.request_note && <p className="mb-2 text-sm text-ink-500">Request note: {approval.request_note}</p>}
+        {approval?.review_note && <p className="mb-3 text-sm text-ink-500">Review note: {approval.review_note}</p>}
+        {(!approval || approval.approval_status === 'Rejected') && (
+          <form onSubmit={submitApprovalRequest} className="space-y-3">
+            <label className="block text-sm text-ink-700">Approval request note
+              <textarea maxLength={1000} rows={2} value={requestNote} onChange={(e) => setRequestNote(e.target.value)} className="mt-1 block w-full rounded-lg border border-surface-border px-3 py-2" />
+            </label>
+            <Button type="submit" disabled={busy}>Request approval</Button>
+          </form>
+        )}
+        {isAdmin && approval?.approval_status === 'Pending' && (
+          <div className="space-y-3">
+            <label className="block text-sm text-ink-700">Reviewer note
+              <textarea maxLength={1000} rows={2} value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} className="mt-1 block w-full rounded-lg border border-surface-border px-3 py-2" />
+            </label>
+            <div className="flex gap-2"><Button type="button" disabled={busy} onClick={() => reviewApproval('Approved')}>Approve</Button><Button type="button" variant="danger" disabled={busy} onClick={() => reviewApproval('Rejected')}>Reject</Button></div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-surface-border p-4">
         <h3 className="mb-3 font-display font-semibold text-ink-900">Invoice files</h3>
         <p className="mb-3 text-xs text-ink-500">PDF, JPG, PNG or WEBP; maximum 4 MB per file.</p>
         <form onSubmit={uploadInvoice} className="flex flex-col gap-3 sm:flex-row sm:items-center">
