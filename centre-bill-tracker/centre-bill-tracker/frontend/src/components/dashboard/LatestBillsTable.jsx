@@ -13,7 +13,6 @@ export default function LatestBillsTable({ bills, isLoading }) {
       <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
         <div className="flex flex-col gap-3">
           {[...Array(4)].map((_, i) => (
-            // eslint-disable-next-line react/no-array-index-key
             <div key={i} className="h-10 w-full animate-pulse rounded bg-surface-muted" />
           ))}
         </div>
