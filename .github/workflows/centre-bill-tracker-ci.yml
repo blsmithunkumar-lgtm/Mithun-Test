@@ -151,4 +151,4 @@ jobs:
           MYSQL_PWD: test-password
         run: |
           test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME='bill_audit_logs'")" = "1"
-          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME='bill_audit_logs' AND INDEX_NAME IN ('idx_bill_audit_logs_bill_created','idx_bill_audit_logs_actor_created')")" = "2"
+          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(DISTINCT INDEX_NAME) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME='bill_audit_logs' AND INDEX_NAME IN ('idx_bill_audit_logs_bill_created','idx_bill_audit_logs_actor_created')")" = "2"
