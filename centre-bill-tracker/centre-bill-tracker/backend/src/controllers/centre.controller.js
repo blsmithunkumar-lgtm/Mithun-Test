@@ -10,6 +10,10 @@ function toApiShape(centre) {
     vendorName: centre.vendor_name,
     wifiId: centre.wifi_id,
     accountNumber: centre.account_number,
+    serviceType: centre.service_type,
+    contractExpiryDate: centre.contract_expiry_date
+      ? String(centre.contract_expiry_date).slice(0, 10)
+      : null,
     status: centre.status,
     billCount: Number(centre.bill_count),
     createdAt: centre.created_at,
@@ -32,7 +36,14 @@ const listCentres = asyncHandler(async (req, res) => {
  * Admin only. Account number must be unique if provided (WiFi ID may be blank).
  */
 const createCentre = asyncHandler(async (req, res) => {
-  const { centreName, vendorName, wifiId, accountNumber } = req.body;
+  const { centreName, vendorName, wifiId, accountNumber, serviceType, contractExpiryDate } = req.body;
+
+  if (serviceType && !['Firewall', 'Leased Line', 'Broadband', 'Managed Service'].includes(serviceType)) {
+    throw ApiError.badRequest('Invalid service type.');
+  }
+  if (contractExpiryDate && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(contractExpiryDate)) {
+    throw ApiError.badRequest('Contract expiry date must use YYYY-MM-DD format.');
+  }
 
   if (accountNumber) {
     const existing = await centreModel.findByAccountNumber(accountNumber);
@@ -41,7 +52,7 @@ const createCentre = asyncHandler(async (req, res) => {
     }
   }
 
-  const centre = await centreModel.create({ centreName, vendorName, wifiId, accountNumber });
+  const centre = await centreModel.create({ centreName, vendorName, wifiId, accountNumber, serviceType, contractExpiryDate });
   return new ApiResponse(201, { centre: toApiShape(centre) }, 'Centre created successfully').send(res);
 });
 
@@ -51,11 +62,18 @@ const createCentre = asyncHandler(async (req, res) => {
  */
 const updateCentre = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { centreName, vendorName, wifiId, accountNumber } = req.body;
+  const { centreName, vendorName, wifiId, accountNumber, serviceType, contractExpiryDate } = req.body;
 
   const existingCentre = await centreModel.findById(id);
   if (!existingCentre) {
     throw ApiError.notFound('Centre not found.');
+  }
+
+  if (serviceType && !['Firewall', 'Leased Line', 'Broadband', 'Managed Service'].includes(serviceType)) {
+    throw ApiError.badRequest('Invalid service type.');
+  }
+  if (contractExpiryDate && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(contractExpiryDate)) {
+    throw ApiError.badRequest('Contract expiry date must use YYYY-MM-DD format.');
   }
 
   if (accountNumber) {
@@ -65,7 +83,7 @@ const updateCentre = asyncHandler(async (req, res) => {
     }
   }
 
-  const updated = await centreModel.update(id, { centreName, vendorName, wifiId, accountNumber });
+  const updated = await centreModel.update(id, { centreName, vendorName, wifiId, accountNumber, serviceType, contractExpiryDate });
   return new ApiResponse(200, { centre: toApiShape(updated) }, 'Centre updated successfully').send(res);
 });
 
