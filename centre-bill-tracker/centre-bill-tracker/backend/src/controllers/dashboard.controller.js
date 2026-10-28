@@ -1,5 +1,6 @@
 const centreModel = require('../models/centre.model');
 const billModel = require('../models/bill.model');
+const { pool } = require('../config/db');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -49,4 +50,32 @@ const getLatestBills = asyncHandler(async (req, res) => {
   return new ApiResponse(200, { bills: bills.map(toBillApiShape) }).send(res);
 });
 
-module.exports = { getSummary, getLatestBills };
+
+const getFinanceSummary = asyncHandler(async (req, res) => {
+  const [rows] = await pool.execute(
+    `SELECT COUNT(*) AS totalBills,
+            SUM(CASE WHEN b.bill_status = 'Received' AND (a.approval_status IS NULL OR a.approval_status <> 'Approved') THEN 1 ELSE 0 END) AS awaitingApproval,
+            SUM(CASE WHEN b.bill_status <> 'Paid' THEN GREATEST(b.amount - COALESCE(p.settled, 0), 0) ELSE 0 END) AS totalOutstanding,
+            SUM(COALESCE(p.bank_paid, 0)) AS totalBankPaid,
+            SUM(COALESCE(p.tds_withheld, 0)) AS totalTdsWithheld,
+            SUM(CASE WHEN b.bill_status = 'Paid' THEN 1 ELSE 0 END) AS settledBills
+       FROM bills b
+       LEFT JOIN (
+         SELECT bill_id, SUM(amount_paid) AS bank_paid, SUM(tds_amount) AS tds_withheld,
+                SUM(amount_paid + tds_amount) AS settled
+           FROM bill_payments GROUP BY bill_id
+       ) p ON p.bill_id = b.id
+       LEFT JOIN bill_approvals a ON a.bill_id = b.id`,
+  );
+  const row = rows[0];
+  return new ApiResponse(200, {
+    totalBills: Number(row.totalBills || 0),
+    awaitingApproval: Number(row.awaitingApproval || 0),
+    totalOutstanding: Number(Number(row.totalOutstanding || 0).toFixed(2)),
+    totalBankPaid: Number(Number(row.totalBankPaid || 0).toFixed(2)),
+    totalTdsWithheld: Number(Number(row.totalTdsWithheld || 0).toFixed(2)),
+    settledBills: Number(row.settledBills || 0),
+  }).send(res);
+});
+
+module.exports = { getSummary, getLatestBills, getFinanceSummary };

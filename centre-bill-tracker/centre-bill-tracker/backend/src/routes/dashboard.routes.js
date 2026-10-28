@@ -9,5 +9,6 @@ router.use(authenticate);
 // Admin + Operations both have dashboard access (SRD sections 2 and 4).
 router.get('/summary', dashboardController.getSummary);
 router.get('/latest-bills', dashboardController.getLatestBills);
+router.get('/finance-summary', dashboardController.getFinanceSummary);
 
 module.exports = router;

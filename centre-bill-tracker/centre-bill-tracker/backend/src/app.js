@@ -20,7 +20,11 @@ app.use(
   cors({
     origin(origin, callback) {
       // Allow requests with no Origin header (e.g. server-to-server health checks, curl).
-      if (!origin || env.clientOrigins.includes(origin)) {
+      // Vercel creates a new hostname for each frontend preview deployment.
+      // Allow only this frontend project's Vercel hostnames in addition to the
+      // explicitly configured production/local origins.
+      const isCentreBillTrackerPreview = /^https:\/\/mithun-test-ltzp(?:-[a-z0-9-]+)?\.vercel\.app$/i.test(origin || '');
+      if (!origin || env.clientOrigins.includes(origin) || isCentreBillTrackerPreview) {
         return callback(null, true);
       }
       // IMPORTANT: pass `false`, not an Error. Throwing here causes the cors
