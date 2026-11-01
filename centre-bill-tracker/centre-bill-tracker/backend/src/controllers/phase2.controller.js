@@ -48,7 +48,8 @@ const saveBreakdown = asyncHandler(async (req, res) => {
   const billId = Number(req.params.id);
   const bill = await requireBill(billId);
   const items = req.body.items;
-  if (!Array.isArray(items) || items.length !== CATEGORIES.length) {    throw ApiError.badRequest('Provide exactly one amount for each bill category.');
+  if (!Array.isArray(items) || items.length !== CATEGORIES.length) {
+    throw ApiError.badRequest('Provide exactly one amount for each bill category.');
   }
   const seen = new Set();
   let totalCents = 0;
@@ -97,7 +98,8 @@ const saveBreakdown = asyncHandler(async (req, res) => {
     await connection.commit();
   } catch (error) {
     await connection.rollback();
-    throw error;  } finally {
+    throw error;
+  } finally {
     connection.release();
   }
   await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.breakdown_updated', entityType: 'bill_breakdown', entityId: billId, details: { categories: normalized } });
@@ -146,7 +148,8 @@ const createPayment = asyncHandler(async (req, res) => {
   } = req.body;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(paymentDate || '')) || Number.isNaN(Date.parse(paymentDate)) || new Date(paymentDate).toISOString().slice(0, 10) !== paymentDate) {
-    throw ApiError.badRequest('A valid payment date in YYYY-MM-DD format is required.');  }
+    throw ApiError.badRequest('A valid payment date in YYYY-MM-DD format is required.');
+  }
   const paid = Number(amountPaid);
   const tds = Number(tdsAmount);
   let paidCents;
@@ -195,7 +198,8 @@ const createPayment = asyncHandler(async (req, res) => {
     // A one-paise shortfall must never silently mark a bill as fully paid.
     const settledCents = Math.round(Number(totals[0].settled) * 100);
     const billCents = Math.round(Number(existingRows[0].amount) * 100);
-    const paymentCents = Math.round(paid * 100);    const tdsCents = Math.round(tds * 100);
+    const paymentCents = Math.round(paid * 100);
+    const tdsCents = Math.round(tds * 100);
     if (!paymentFitsOutstanding(settledCents, paymentCents, tdsCents, billCents)) {
       throw ApiError.badRequest('Payment plus TDS cannot exceed the bill outstanding balance.');
     }
@@ -244,7 +248,8 @@ const createPayment = asyncHandler(async (req, res) => {
 
   const [rows] = await pool.execute(
     `SELECT p.id, p.payment_date, p.amount_paid, p.tds_amount, p.payment_method,
-            p.transaction_reference, p.reconciliation_status, p.remarks, p.created_at,            u.full_name AS created_by_name
+            p.transaction_reference, p.reconciliation_status, p.remarks, p.created_at,
+            u.full_name AS created_by_name
        FROM bill_payments p JOIN users u ON u.id = p.created_by WHERE p.id = ?`,
     [paymentId],
   );
@@ -286,7 +291,8 @@ const uploadAttachment = asyncHandler(async (req, res) => {
   return new ApiResponse(201, { attachment: {
     id: result.insertId, filename: req.file.originalname.slice(0, 255),
     mimeType: req.file.mimetype, fileSize: req.file.size,
-  } }, 'Invoice uploaded successfully').send(res);});
+  } }, 'Invoice uploaded successfully').send(res);
+});
 
 const downloadAttachment = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
@@ -335,7 +341,8 @@ const saveAmortization = asyncHandler(async (req, res) => {
   const schedule = Array.from({ length: months }, (_, index) => {
     const date = new Date(Date.UTC(year, month - 1 + index, 1));
     return {
-      month: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,      amount: (baseCents + (index < remainder ? 1 : 0)) / 100,
+      month: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+      amount: (baseCents + (index < remainder ? 1 : 0)) / 100,
     };
   });
 
@@ -384,7 +391,8 @@ const requestApproval = asyncHandler(async (req, res) => {
     throw ApiError.conflict('This bill has already been approved.');
   }
   await pool.execute(
-    `INSERT INTO bill_approvals (bill_id, approval_status, requested_by, request_note)     VALUES (?, 'Pending', ?, ?)
+    `INSERT INTO bill_approvals (bill_id, approval_status, requested_by, request_note)
+     VALUES (?, 'Pending', ?, ?)
      ON DUPLICATE KEY UPDATE approval_status = 'Pending', requested_by = VALUES(requested_by),
        reviewed_by = NULL, request_note = VALUES(request_note), review_note = NULL,
        requested_at = CURRENT_TIMESTAMP, reviewed_at = NULL`,
@@ -460,7 +468,8 @@ const exportPaymentsCsv = asyncHandler(async (req, res) => {
   const lines = [columns, ...rows.map((row) => [
     row.centre_name, row.invoice_number, row.bill_month, row.bill_amount, row.payment_date,
     row.amount_paid, row.tds_amount, row.payment_method, row.transaction_reference,
-    row.reconciliation_status, row.remarks, row.recorded_by,  ])].map((row) => row.map(escapeCsv).join(','));
+    row.reconciliation_status, row.remarks, row.recorded_by,
+  ])].map((row) => row.map(escapeCsv).join(','));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   await writeAuditLog({ actorUserId: req.user.id, action: 'report.exported', entityType: 'report', entityId: 'payments-csv', details: { rows: rows.length } });
   res.setHeader('Content-Disposition', 'attachment; filename="centre-bill-payments.csv"');
@@ -509,7 +518,8 @@ const listBillAuditLogs = asyncHandler(async (req, res) => {
     `SELECT l.id, l.action, l.entity_type, l.entity_id, l.details, l.created_at,
             u.full_name AS actor_name, u.username AS actor_username
        FROM bill_audit_logs l
-       LEFT JOIN users u ON u.id = l.actor_user_id      WHERE l.bill_id = ? ORDER BY l.created_at DESC, l.id DESC LIMIT 200`,
+       LEFT JOIN users u ON u.id = l.actor_user_id
+      WHERE l.bill_id = ? ORDER BY l.created_at DESC, l.id DESC LIMIT 200`,
     [billId],
   );
   return new ApiResponse(200, { auditLogs: rows.map((row) => ({
