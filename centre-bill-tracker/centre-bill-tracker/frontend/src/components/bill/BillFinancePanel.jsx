@@ -72,6 +72,22 @@ export default function BillFinancePanel({ bill, isAdmin }) {
     finally { setBusy(false); }
   };
 
+  const updateReconciliation = async (entry, reconciliationStatus) => {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await phase2Api.updatePaymentReconciliation(bill.id, entry.id, reconciliationStatus);
+      setPayments((current) => current.map((paymentEntry) => paymentEntry.id === entry.id ? { ...paymentEntry, reconciliationStatus } : paymentEntry));
+      setNotice('Payment #' + entry.id + ' reconciliation marked ' + reconciliationStatus + '.');
+      if (isAdmin) {
+        const refreshed = await phase2Api.getAuditLogs(bill.id);
+        setAuditLogs(refreshed.auditLogs || []);
+      }
+    } catch (err) {
+      setError(err.message || 'Could not update reconciliation status.');
+      await load();
+    } finally { setBusy(false); }
+  };
+
   const submitPayment = async (event) => {
     event.preventDefault();
     setBusy(true); setError(''); setNotice('');
@@ -195,7 +211,7 @@ export default function BillFinancePanel({ bill, isAdmin }) {
         <h3 className="mb-3 font-display font-semibold text-ink-900">Payment history</h3>
         {payments.length === 0 ? <p className="text-sm text-ink-500">No payments recorded yet.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-ink-500"><th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Bank paid</th><th className="py-2 pr-3">TDS</th><th className="py-2 pr-3">Method / Ref</th><th className="py-2">Reconciliation</th></tr></thead>
-            <tbody>{payments.map((entry) => <tr key={entry.id} className="border-b border-surface-border"><td className="py-2 pr-3">{entry.paymentDate}</td><td className="py-2 pr-3">{money(entry.amountPaid)}</td><td className="py-2 pr-3">{money(entry.tdsAmount)}</td><td className="py-2 pr-3">{entry.paymentMethod}{entry.transactionReference ? ` / ${entry.transactionReference}` : ''}</td><td className="py-2">{entry.reconciliationStatus}</td></tr>)}</tbody>
+            <tbody>{payments.map((entry) => <tr key={entry.id} className="border-b border-surface-border"><td className="py-2 pr-3">{entry.paymentDate}</td><td className="py-2 pr-3">{money(entry.amountPaid)}</td><td className="py-2 pr-3">{money(entry.tdsAmount)}</td><td className="py-2 pr-3">{entry.paymentMethod}{entry.transactionReference ? ` / ${entry.transactionReference}` : ''}</td><td className="py-2"><select aria-label={"Reconciliation status for payment " + entry.id} value={entry.reconciliationStatus} disabled={busy} onChange={(event) => updateReconciliation(entry, event.target.value)} className="rounded border border-surface-border px-2 py-1"><option>Pending</option><option>Matched</option><option>Mismatch</option></select></td></tr>)}</tbody>
           </table></div>
         )}
       </section>
