@@ -95,6 +95,13 @@ const saveBreakdown = asyncHandler(async (req, res) => {
         WHERE bill_id = ?`,
       [billId],
     );
+    // Keep the audit event atomic with the financial breakdown update.
+    // If audit persistence fails, roll back the category changes and approval reset.
+    await writeAuditLog({
+      executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+      action: 'bill.breakdown_updated', entityType: 'bill_breakdown', entityId: billId,
+      details: { categories: normalized },
+    });
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -102,7 +109,6 @@ const saveBreakdown = asyncHandler(async (req, res) => {
   } finally {
     connection.release();
   }
-  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.breakdown_updated', entityType: 'bill_breakdown', entityId: billId, details: { categories: normalized } });
   return getBreakdown(req, res);
 });
 
