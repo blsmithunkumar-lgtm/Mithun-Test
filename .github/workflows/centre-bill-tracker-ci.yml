@@ -7,7 +7,7 @@ on:
       - 'centre-bill-tracker/centre-bill-tracker/**'
       - '.github/workflows/centre-bill-tracker-ci.yml'
   push:
-    branches: [main, 'phase1/**']
+    branches: [main, 'phase1/**', 'phase2/**']
     paths:
       - 'centre-bill-tracker/centre-bill-tracker/**'
       - '.github/workflows/centre-bill-tracker-ci.yml'
@@ -94,3 +94,49 @@ jobs:
           MYSQL_PWD: test-password
         run: |
           mysql -h 127.0.0.1 -uroot migration_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_add_centre_service_expiry.sql
+
+  phase2-database-migration:
+    name: Phase 2 schema migration smoke test (temporary MySQL)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: phase2_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create minimal existing application tables
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          mysql -h 127.0.0.1 -uroot phase2_test <<'SQL'
+          CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, full_name VARCHAR(150) NOT NULL) ENGINE=InnoDB;
+          CREATE TABLE centres (id INT AUTO_INCREMENT PRIMARY KEY, centre_name VARCHAR(200) NOT NULL) ENGINE=InnoDB;
+          CREATE TABLE bills (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            centre_id INT NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            created_by INT NOT NULL,
+            CONSTRAINT fk_test_bill_centre FOREIGN KEY (centre_id) REFERENCES centres(id),
+            CONSTRAINT fk_test_bill_user FOREIGN KEY (created_by) REFERENCES users(id)
+          ) ENGINE=InnoDB;
+          SQL
+      - name: Apply Phase 2 migration twice
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          mysql -h 127.0.0.1 -uroot phase2_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_phase2_billing_payments_invoices.sql
+          mysql -h 127.0.0.1 -uroot phase2_test < centre-bill-tracker/centre-bill-tracker/backend/src/database/migrations/20261017_phase2_billing_payments_invoices.sql
+      - name: Verify all Phase 2 tables exist
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          test "$(mysql -h 127.0.0.1 -uroot phase2_test -Nse "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='phase2_test' AND TABLE_NAME IN ('bill_items','bill_payments','bill_attachments','bill_amortizations','bill_approvals')")" = "5"

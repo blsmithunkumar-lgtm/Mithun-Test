@@ -6,19 +6,19 @@ purchase required**:
 
 | Component | Service | Why |
 |---|---|---|
-| Frontend  | **Vercel** (Hobby/free plan) | Free static hosting, HTTPS, global CDN |
-| Backend   | **Render** (free Web Service) | Free Node.js hosting, HTTPS, auto-deploy from Git |
+| Frontend  | **Vercel** | Static hosting, HTTPS, global CDN |
+| Backend   | **Vercel** (Node.js Function) | Serverless API deployment from Git |
 | Database  | **TiDB Cloud Starter** (free plan) | Genuinely free indefinitely (no card, no expiry), MySQL wire-compatible, works unchanged with the `mysql2` driver already used in this project |
 
 Everything is environment-variable-driven — no code changes are needed to
 move between local development, this free setup, and paid hosting later.
 
-> **A note on Vercel's terms:** Vercel's Hobby plan is intended for
-> personal/non-commercial projects. It works perfectly for the V1
-> development-and-testing phase described here, but if this becomes a
-> permanent tool the company relies on day-to-day, plan to move the
-> frontend to Vercel Pro (or another host) at that point — the deployment
-> steps below are identical either way, only the plan changes.
+> **Current deployment note:** The Centre Bill Tracker frontend and backend
+> are deployed as separate Vercel projects. The backend project uses
+> `backend/vercel.json` and routes requests to `backend/api/index.js`.
+> Keep the frontend API URL and backend CORS allowlist aligned with the
+> actual production domains. Confirm current plan limits and suitability in
+> Vercel before relying on the app for business-critical daily operations.
 
 ---
 
@@ -57,16 +57,126 @@ TiDB Cloud tier or a different MySQL host is a connection-string change only
 
 ---
 
+
+## 1B. Production release gate (mandatory)
+
+Do not merge Phase 2 or Phase 3 to production until every gate below is complete.
+A successful GitHub Actions run uses a temporary MySQL database and is **not**
+evidence that the production schema has been changed or that production data
+can be saved and reopened.
+
+### Gate A — identify the actual production database
+
+1. Confirm the production backend deployment and the exact database host/name
+   from the hosting provider's environment settings. Do not copy credentials
+   into Git, chat, CI logs, or a ticket.
+2. Confirm the DB account can read the current schema and has permission to
+   create the new tables. If access is denied, stop and restore authorized
+   owner access first; do not work around access controls.
+
+### Gate B — create and verify a private backup
+
+Run from a trusted machine with the MySQL client tools installed. Set
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in the
+local shell from the hosting provider's secure settings. Do not paste values
+into commands or commit them. Store the backup outside the repository in an
+encrypted, access-controlled location.
+
+```bash
+set -eu
+umask 077
+BACKUP_FILE="$HOME/centre-bill-tracker-$(date -u +%Y%m%dT%H%M%SZ).sql"
+MYSQL_PWD="$DB_PASSWORD" mysqldump \
+  --host="$DB_HOST" --port="${DB_PORT:-4000}" --user="$DB_USER" \
+  --ssl-mode=VERIFY_IDENTITY --single-transaction \
+  --routines --triggers --events "$DB_NAME" > "$BACKUP_FILE"
+test -s "$BACKUP_FILE"
+grep -q 'CREATE TABLE' "$BACKUP_FILE"
+sha256sum "$BACKUP_FILE"
+```
+
+For providers that require a specific CA certificate, add the provider's
+documented CA option. Do not treat a non-empty file alone as a full restore
+test: confirm the backup contains the expected existing tables and perform a
+restore test into a separate, non-production database before release.
+
+### Gate C — apply additive migrations in order
+
+After the backup and restore test succeed, apply the Phase 2 migration first:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase2_billing_payments_invoices.sql;
+```
+
+Verify all five tables exist: `bill_items`, `bill_payments`,
+`bill_attachments`, `bill_amortizations`, and `bill_approvals`.
+Then deploy Phase 2 and test with a designated test bill/user before real
+finance transactions. Do not use a real bill to test payments.
+
+Only after Phase 2 is verified, approved, and deployed, apply Phase 3:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase3_audit_logs.sql;
+```
+
+Verify `bill_audit_logs` and both indexes exist, then deploy Phase 3.
+
+### Gate D — production smoke test and recovery
+
+Using an authorized test account and a non-financial test bill, verify:
+- login and role permissions work;
+- bill details save, refresh, and reopen from the database;
+- breakdown total validation and approval flow work;
+- payment/TDS arithmetic rejects overpayment and does not mark a bill Paid
+  until the exact invoice total is settled;
+- invoice upload/download, report CSV, and audit history work;
+- no database errors appear in backend logs.
+
+If a deployment fails, restore the previous application deployment first.
+These migrations are additive; do not drop the new tables as an ad-hoc rollback.
+Keep the private database backup until the new version has been verified and
+the agreed retention period has elapsed.
+
+## 1A. Phase 2 database migration (existing installations)
+
+For an existing database, do **not** re-run the full schema file over live data.
+After reviewing and approving the Phase 2 release, back up the database and
+apply this additive migration to the existing `centre_bill_tracker` database:
+
+```sql
+SOURCE backend/src/database/migrations/20261017_phase2_billing_payments_invoices.sql;
+```
+
+The migration creates the bill category, payment, invoice attachment,
+prepaid amortization, and approval tables. It is designed to be re-runnable.
+The GitHub Actions migration smoke test verifies the tables can be created
+twice against a temporary MySQL database. It does **not** run against production.
+
+Phase 2 payment workflow:
+1. Mark the bill as **Received**.
+2. Submit an approval request in the Finance panel.
+3. An Admin approves or rejects the request.
+4. Once approved, record bank payments and any TDS withheld. Partial payments
+   are supported; the bill becomes **Paid** only when bank payments plus TDS
+   settle the bill total. The final settlement must be recorded by an Admin.
+5. The Finance panel also supports invoice files (PDF/JPG/PNG/WEBP, max 4 MB),
+   bill bifurcation, 3- or 6-month prepaid amortization, and payment CSV export.
+
+TDS is recorded as an explicit amount; the app does not assume a tax rate or
+taxable base. Confirm the applicable accounting treatment before entering it.
+Invoice files are stored in the database in this initial version, so monitor
+database storage as attachments accumulate.
+
 ## 2. Environment Variable Configuration
 
 Nothing is hardcoded anywhere in the codebase — every credential, URL, and
 secret is read from environment variables.
 
-### Backend (`backend/.env` locally, or Render's Environment tab in production)
+### Backend (`backend/.env` locally, or the backend Vercel project's Environment Variables in production)
 
 | Variable | Example (production) | Notes |
 |---|---|---|
-| `PORT` | *(leave unset)* | Render injects this automatically |
+| `PORT` | *(normally leave unset)* | Vercel manages the function's listening port |
 | `NODE_ENV` | `production` | |
 | `DB_HOST` | `gateway01.ap-southeast-1.prod.aws.tidbcloud.com` | From TiDB Cloud |
 | `DB_PORT` | `4000` | TiDB Cloud's MySQL port |
@@ -85,7 +195,7 @@ secret is read from environment variables.
 
 | Variable | Example (production) | Notes |
 |---|---|---|
-| `VITE_API_BASE_URL` | `https://your-backend.onrender.com/api` | Your deployed Render URL + `/api` |
+| `VITE_API_BASE_URL` | `https://mithun-test.vercel.app/api` | Use the actual backend production URL + `/api`; verify the configured value in the frontend project's environment settings. |
 
 **Never commit `.env` files** — both `backend/.gitignore` and
 `frontend/.gitignore` already exclude them. Only `.env.example` (no real
@@ -93,84 +203,80 @@ secrets) is committed.
 
 ---
 
-## 3. Backend Deployment (Render)
+## 3. Backend Deployment (Vercel)
 
-1. Push this project to a GitHub (or GitLab/Bitbucket) repository.
-2. In Render, click **New +** → **Web Service** → connect your repository.
-3. Configure:
-   - **Root Directory**: `backend`
-   - **Runtime**: Node
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Instance Type**: Free
-4. Add all backend environment variables from the table above under the
-   **Environment** tab.
-5. Deploy. Render gives you a URL like `https://centre-bill-tracker-api.onrender.com`.
-6. Verify it's alive: visit `https://<your-render-url>/health` — should
-   return `{"success":true,"message":"Centre Bill Tracker API is running"}`.
-7. Run the seed script once, from your local machine, pointed at the
-   production database (use the same `DB_*` values you put in Render):
-   ```bash
-   cd backend
-   npm install
-   npm run seed
-   ```
-   (Or temporarily run `npm run seed` from Render's dashboard Shell tab,
-   then close it — either works.)
+The production backend is a separate Vercel project. Preserve its existing
+project configuration when updating deployments; do not create a duplicate
+project merely to follow this guide.
 
-**Alternative:** the included `render.yaml` at the project root lets you use
-Render's **New +** → **Blueprint** flow instead of manual setup — it
-pre-fills the build/start commands and generates `JWT_SECRET` for you; you
-still fill in the `DB_*` and `CLIENT_ORIGIN` values yourself.
+1. Open the existing backend project in Vercel (currently named `mithun-test`).
+2. Confirm its Root Directory points to the backend application directory
+   (`centre-bill-tracker/centre-bill-tracker/backend` if the repository root
+   is selected as the project root). If the project already uses a different
+   valid root setting, document and preserve that working configuration.
+3. Confirm the project uses the committed `backend/vercel.json`, which maps
+   `api/index.js` to the Vercel Node.js runtime and rewrites requests to it.
+4. Configure the backend variables from the table above under
+   **Settings → Environment Variables**, scoped to Production as appropriate.
+   Never copy secret values into Git, chat, issue comments, or logs.
+5. Deploy through the existing Git integration and verify
+   `https://mithun-test.vercel.app/health` returns
+   `{"success":true,"message":"Centre Bill Tracker API is running"}`.
+6. Check **Runtime Logs** for the production deployment when validating
+   database connectivity. Build logs only confirm build-time activity; an
+   empty runtime-log view is not proof that the database is connected.
+7. Run database seed operations only when explicitly needed and approved.
+   Use a trusted local environment with authorized database credentials;
+   do not seed production casually or rely on a hosting dashboard Shell.
 
-**Free tier behavior to expect:** the service spins down after 15 minutes
-of no traffic and takes 30–60 seconds to wake up on the next request. For 4
-internal users, this just means the first request of the day (or after a
-break) is slow — nothing to fix, just expected free-tier behavior. It goes
-away automatically the moment you upgrade to a paid Render instance.
+Do not use the health response alone as proof of database persistence. Confirm
+that a non-financial test record can be created, refreshed, and reopened before
+calling the production database integration verified.
 
 ---
 
 ## 4. Frontend Deployment (Vercel)
 
-1. In Vercel, click **Add New** → **Project** → import the same repository.
-2. Configure:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: Vite (auto-detected)
-   - **Build Command**: `npm run build` (default)
-   - **Output Directory**: `dist` (default)
-3. Add the environment variable `VITE_API_BASE_URL` pointing at your Render
-   backend URL (with `/api` at the end), e.g.
-   `https://centre-bill-tracker-api.onrender.com/api`.
-4. Deploy. Vercel gives you a URL like `https://centre-bill-tracker.vercel.app`.
-5. `frontend/vercel.json` (already included) rewrites all routes to
-   `index.html`, so React Router's client-side routes (e.g. `/bills`,
-   `/dashboard`) work correctly on direct load and on refresh.
+The frontend is already deployed as a separate Vercel project. Update that
+existing project rather than creating a duplicate.
+
+1. Open the existing frontend project in Vercel (currently named
+   `mithun-test-ltzp`).
+2. Preserve its working Root Directory and Vite build settings. If configuring
+   from the repository root, the frontend directory is
+   `centre-bill-tracker/centre-bill-tracker/frontend`.
+3. In **Settings → Environment Variables**, set `VITE_API_BASE_URL` to the
+   backend production URL followed by `/api`, currently expected to be
+   `https://mithun-test.vercel.app/api`. Verify the live value in Vercel
+   without copying it into chat or source control.
+4. Redeploy the frontend after changing environment variables.
+5. Confirm `frontend/vercel.json` rewrites client-side routes to
+   `index.html`, so routes such as `/bills` and `/dashboard` load and
+   refresh without a 404.
 
 ---
 
 ## 5. Connect the Frontend and Backend (CORS)
 
-1. Go back to Render → your backend service → Environment tab.
-2. Set `CLIENT_ORIGIN` to your actual Vercel URL, e.g.
-   `https://centre-bill-tracker.vercel.app` (no trailing slash). If you
-   also want to keep testing from `localhost:5173`, use a comma-separated
-   list: `https://centre-bill-tracker.vercel.app,http://localhost:5173`.
-3. Save — Render redeploys automatically. The backend only accepts requests
-   from origins listed here (see `backend/src/app.js`); anything else is
-   rejected by CORS.
+1. Open the backend Vercel project → **Settings → Environment Variables**.
+2. Set `CLIENT_ORIGIN` to the actual frontend production URL (no trailing
+   slash). Add a comma-separated list only if additional origins are genuinely
+   required, for example a local development origin.
+3. Save the variable and redeploy the backend if Vercel does not automatically
+   create a new deployment. The backend only accepts requests from origins
+   listed here (see `backend/src/app.js`); anything else is rejected by CORS.
 
 ## 6. Final Verification Checklist
 
-- [ ] `https://<render-url>/health` returns success
+- [ ] `https://mithun-test.vercel.app/health` returns success
 - [ ] Visiting the Vercel URL shows the login page
 - [ ] Logging in with the seeded Admin account works and reaches the Dashboard
 - [ ] Logging in with the seeded Operations account works, and management
-      actions (Add Centre, Edit Bill, Mark Paid) are correctly hidden/blocked
+      actions (Add Centre and Edit Bill) are correctly hidden/blocked, and payment settlement requires an approved bill plus the payment ledger
 - [ ] Adding a centre and a bill from the deployed app persists correctly
       (refresh the page — data should still be there, confirming it's
       reading from the cloud database, not local state)
-- [ ] Direct-loading a deep link, e.g. `https://<vercel-url>/bills`, and
+- [ ] Direct-loading a deep link, e.g. `https://<your-frontend-vercel-url>/bills`, and
       refreshing the page both work without a 404
 
 ---
@@ -189,9 +295,9 @@ To migrate:
 3. Export/import existing data with `mysqldump` (works against TiDB Cloud
    too, since it's MySQL wire-compatible).
 4. Update `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` /
-   `DB_SSL` in Render's environment variables. No code changes.
+   `DB_SSL` in the backend Vercel project's environment variables. No code changes.
 
-**Backend:** Any Node.js host works (Render paid tier, Railway, a VPS,
+**Backend:** Any Node.js host works (Vercel, Railway, a VPS,
 AWS/GCP/Azure). Because config is entirely environment-variable-driven:
 1. Deploy the same `backend/` folder with `npm install && npm start`.
 2. Set the same environment variables listed in section 2.
@@ -208,6 +314,6 @@ produces a static `dist/` folder) — deploy that folder anywhere, keeping
 an SPA rewrite rule (`frontend/vercel.json` is Vercel-specific; other
 hosts have their own equivalent "redirect all routes to index.html" setting).
 
-**Custom domain (optional, whenever you're ready):** Both Vercel and
-Render support attaching a custom domain directly in their dashboards once
-you purchase one — no application code changes required either way.
+**Custom domain (optional, whenever you're ready):** Vercel supports attaching
+a custom domain in the project dashboard once you purchase one — no application
+code changes required, but update the frontend API URL and backend CORS allowlist.
