@@ -437,17 +437,27 @@ const getFinanceSummary = asyncHandler(async (req, res) => {
        FROM bill_items GROUP BY category ORDER BY FIELD(category, ?, ?, ?, ?, ?)`,
     CATEGORIES,
   );
+  const [[outstandingTotals]] = await pool.execute(
+    `SELECT COALESCE(SUM(
+              CASE WHEN b.bill_status = 'Paid' THEN 0
+                   ELSE GREATEST(b.amount - COALESCE(p.settled, 0), 0) END
+            ), 0) AS outstanding
+       FROM bills b
+       LEFT JOIN (
+         SELECT bill_id, SUM(amount_paid + tds_amount) AS settled
+           FROM bill_payments GROUP BY bill_id
+       ) p ON p.bill_id = b.id`,
+  );
   const totalBilled = Number(billTotals.total_billed);
   const amountPaid = Number(paymentTotals.amount_paid);
   const tdsAmount = Number(paymentTotals.tds_amount);
   const settledAmount = Number(paymentTotals.settled_amount);
   return new ApiResponse(200, {
     totalBills: Number(billTotals.total_bills), totalBilled, amountPaid, tdsAmount,
-    settledAmount, outstandingBalance: Math.max(0, totalBilled - settledAmount),
+    settledAmount, outstandingBalance: Number(outstandingTotals.outstanding),
     categories: categoryRows.map((row) => ({ category: row.category, amount: Number(row.amount) })),
   }).send(res);
 });
-
 const exportPaymentsCsv = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT c.centre_name, b.invoice_number, b.bill_month, b.amount AS bill_amount,
