@@ -4,6 +4,7 @@ import LoginPage from '../pages/LoginPage';
 import DashboardPage from '../pages/DashboardPage';
 import CentresPage from '../pages/CentresPage';
 import BillsPage from '../pages/BillsPage';
+import FinanceWorkspacePage from '../pages/FinanceWorkspacePage';
 
 export default function AppRoutes() {
   return (
@@ -36,6 +37,15 @@ export default function AppRoutes() {
         element={(
           <ProtectedRoute>
             <BillsPage />
+          </ProtectedRoute>
+        )}
+      />
+
+      <Route
+        path="/finance"
+        element={(
+          <ProtectedRoute>
+            <FinanceWorkspacePage />
           </ProtectedRoute>
         )}
       />

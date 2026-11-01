@@ -29,11 +29,15 @@ axiosClient.interceptors.request.use((config) => {
 // failures such as CORS, offline connections, DNS, or blocked requests.
 axiosClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
-    const serverMessage = error.response?.data?.message;
+    let responseData = error.response?.data;
+    if (typeof Blob !== 'undefined' && responseData instanceof Blob) {
+      try { responseData = JSON.parse(await responseData.text()); } catch { /* keep generic message for non-JSON error bodies */ }
+    }
+    const serverMessage = responseData?.message;
     let message = serverMessage || 'Something went wrong. Please try again.';
-    const fieldErrors = error.response?.data?.errors || [];
+    const fieldErrors = responseData?.errors || [];
 
     if (!error.response) {
       message = 'Cannot reach the server. Check your connection or try again shortly.';
@@ -43,15 +47,4 @@ axiosClient.interceptors.response.use(
 
     // Clear expired/invalid sessions, but never redirect a failed login request.
     if (status === 401 && !/\/auth\/login\/?$/.test(error.config?.url || '')) {
-      localStorage.removeItem('cbt_token');
-      localStorage.removeItem('cbt_user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    }
-
-    return Promise.reject({ status, message, fieldErrors, raw: error });
-  },
-);
-
-export default axiosClient;
+      localStorage.removeItem('cbt_tok...[truncated]
