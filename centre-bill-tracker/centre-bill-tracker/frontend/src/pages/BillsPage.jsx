@@ -27,6 +27,7 @@ export default function BillsPage() {
   const [editingBill, setEditingBill] = useState(null);
   const [financeBill, setFinanceBill] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingReport, setIsExportingReport] = useState(false);
   const [statusChange, setStatusChange] = useState(null);
   const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState('');
@@ -78,6 +79,24 @@ export default function BillsPage() {
     } finally { setIsExporting(false); }
   };
 
+  const exportBillReport = async () => {
+    setIsExportingReport(true);
+    setLoadError('');
+    try {
+      const response = await phase2Api.exportBillReportCsv();
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'centre-bill-report.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setLoadError(err.message || 'Could not export bill report.');
+    } finally { setIsExportingReport(false); }
+  };
+
   const confirmStatusChange = async () => {
     if (!statusChange) return;
     setIsStatusSubmitting(true);
@@ -100,7 +119,7 @@ export default function BillsPage() {
             <option value="">All Statuses</option><option value="Pending">Pending</option><option value="Received">Received</option><option value="Paid">Paid</option>
           </Select>
         </div>
-        <div className="flex gap-2"><Button variant="secondary" disabled={isExporting} onClick={exportPayments}>Export Payments CSV</Button><Button onClick={openAddForm}>+ Add Bill</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={isExportingReport} onClick={exportBillReport}>Export Bill Report</Button><Button variant="secondary" disabled={isExporting} onClick={exportPayments}>Export Payments CSV</Button><Button onClick={openAddForm}>+ Add Bill</Button></div>
       </div>
       <div className="mb-4"><Alert variant="error">{loadError}</Alert></div>
       {isLoading ? <Loader label="Loading bills..." /> : (

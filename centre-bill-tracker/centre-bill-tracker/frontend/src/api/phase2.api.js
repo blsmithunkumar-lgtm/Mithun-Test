@@ -25,3 +25,6 @@ export const getApproval = (billId) => unwrap(axiosClient.get(`/phase2/bills/${b
 export const requestApproval = (billId, requestNote) => unwrap(axiosClient.post(`/phase2/bills/${billId}/approval`, { requestNote }));
 export const reviewApproval = (billId, status, reviewNote) => unwrap(axiosClient.patch(`/phase2/bills/${billId}/approval`, { status, reviewNote }));
 export const exportPaymentsCsv = () => axiosClient.get('/phase2/reports/payments.csv', { responseType: 'blob' });
+
+export const exportBillReportCsv = () => axiosClient.get('/phase2/reports/bills.csv', { responseType: 'blob' });
+export const getAuditLogs = (billId) => unwrap(axiosClient.get(`/phase2/bills/${billId}/audit`));
