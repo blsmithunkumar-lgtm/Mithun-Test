@@ -33,7 +33,7 @@ axiosClient.interceptors.response.use(
     const status = error.response?.status;
     let responseData = error.response?.data;
     if (typeof Blob !== 'undefined' && responseData instanceof Blob) {
-      try { responseData = JSON.parse(await responseData.text()); } catch { /* keep generic message for non-JSON error bodies */ }
+      try { responseData = JSON.parse(await responseData.text()); } catch { /* non-JSON error body */ }
     }
     const serverMessage = responseData?.message;
     let message = serverMessage || 'Something went wrong. Please try again.';
@@ -47,4 +47,15 @@ axiosClient.interceptors.response.use(
 
     // Clear expired/invalid sessions, but never redirect a failed login request.
     if (status === 401 && !/\/auth\/login\/?$/.test(error.config?.url || '')) {
-      localStorage.removeItem('cbt_tok...[truncated]
+      localStorage.removeItem('cbt_token');
+      localStorage.removeItem('cbt_user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+
+    return Promise.reject({ status, message, fieldErrors, raw: error });
+  },
+);
+
+export default axiosClient;

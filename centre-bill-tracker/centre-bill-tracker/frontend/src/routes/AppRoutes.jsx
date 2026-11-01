@@ -41,14 +41,7 @@ export default function AppRoutes() {
         )}
       />
 
-      <Route
-        path="/finance"
-        element={(
-          <ProtectedRoute>
-            <FinanceWorkspacePage />
-          </ProtectedRoute>
-        )}
-      />
+      <Route path="/finance" element={<ProtectedRoute><FinanceWorkspacePage /></ProtectedRoute>} />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
