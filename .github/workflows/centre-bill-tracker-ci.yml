@@ -35,17 +35,22 @@ jobs:
       - run: npm run build
 
   backend:
-    name: Backend syntax checks
+    name: Backend syntax and finance tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: centre-bill-tracker/centre-bill-tracker/backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install backend dependencies
+        run: npm install
       - name: Check JavaScript syntax
-        working-directory: centre-bill-tracker/centre-bill-tracker/backend
-        run: |
-          find . -path './node_modules' -prune -o -name '*.js' -type f -print0 | xargs -0 -n1 node --check
+        run: find . -path './node_modules' -prune -o -name '*.js' -type f -print0 | xargs -0 -n1 node --check
+      - name: Run automated finance and audit tests
+        run: npm test
 
   database-migration:
     name: Database migration smoke test (temporary MySQL)

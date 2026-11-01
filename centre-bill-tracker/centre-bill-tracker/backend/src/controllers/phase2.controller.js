@@ -3,6 +3,7 @@ const { writeAuditLog } = require('../utils/auditLog');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
+const { toPaise, paymentFitsOutstanding } = require('../utils/finance');
 
 const CATEGORIES = ['Base Amount', 'Internet', 'Static IP', 'Late Fee', 'GST'];
 const PAYMENT_METHODS = ['Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Other'];
@@ -150,16 +151,16 @@ const createPayment = asyncHandler(async (req, res) => {
   }
   const paid = Number(amountPaid);
   const tds = Number(tdsAmount);
-  const paidCents = Math.round(paid * 100);
-  const tdsCentsInput = Math.round(tds * 100);
-  if (!Number.isFinite(paid) || paid <= 0 || !Number.isSafeInteger(paidCents)
-    || Math.abs((paid * 100) - paidCents) > 1e-7) {
-    throw ApiError.badRequest('Payment amount must be positive and have up to two decimals.');
+  let paidCents;
+  let tdsCentsInput;
+  try {
+    paidCents = toPaise(paid);
+    tdsCentsInput = toPaise(tds);
+  } catch {
+    throw ApiError.badRequest('Payment and TDS amounts must have up to two decimals.');
   }
-  if (!Number.isFinite(tds) || tds < 0 || !Number.isSafeInteger(tdsCentsInput)
-    || Math.abs((tds * 100) - tdsCentsInput) > 1e-7) {
-    throw ApiError.badRequest('TDS amount must be non-negative and have up to two decimals.');
-  }
+  if (paid <= 0) throw ApiError.badRequest('Payment amount must be positive.');
+  if (tds < 0) throw ApiError.badRequest('TDS amount must be non-negative.');
   if (!PAYMENT_METHODS.includes(paymentMethod)) throw ApiError.badRequest('Invalid payment method.');
   if (!RECONCILIATION.includes(reconciliationStatus)) throw ApiError.badRequest('Invalid reconciliation status.');
   if (String(transactionReference).length > 120 || String(remarks).length > 1000) {
@@ -198,7 +199,7 @@ const createPayment = asyncHandler(async (req, res) => {
     const billCents = Math.round(Number(existingRows[0].amount) * 100);
     const paymentCents = Math.round(paid * 100);
     const tdsCents = Math.round(tds * 100);
-    if (settledCents + paymentCents + tdsCents > billCents) {
+    if (!paymentFitsOutstanding(settledCents, paymentCents, tdsCents, billCents)) {
       throw ApiError.badRequest('Payment plus TDS cannot exceed the bill outstanding balance.');
     }
     const [result] = await connection.execute(
@@ -222,6 +223,20 @@ const createPayment = asyncHandler(async (req, res) => {
       if (!statusUpdate.affectedRows) throw ApiError.conflict('Bill status changed while recording the final payment.');
       billMarkedPaid = true;
     }
+    // Persist finance audit events in the same transaction as the payment.
+    // If audit storage fails, the payment and status change are rolled back too.
+    await writeAuditLog({
+      executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+      action: 'payment.recorded', entityType: 'bill_payment', entityId: paymentId,
+      details: { amountPaid: paid, tdsAmount: tds, paymentDate, paymentMethod },
+    });
+    if (billMarkedPaid) {
+      await writeAuditLog({
+        executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+        action: 'bill.status_changed', entityType: 'bill', entityId: billId,
+        details: { from: 'Received', to: 'Paid', paymentId, paymentDate },
+      });
+    }
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -238,10 +253,6 @@ const createPayment = asyncHandler(async (req, res) => {
     [paymentId],
   );
   const p = rows[0];
-  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'payment.recorded', entityType: 'bill_payment', entityId: paymentId, details: { amountPaid: Number(p.amount_paid), tdsAmount: Number(p.tds_amount), paymentDate: p.payment_date, paymentMethod: p.payment_method } });
-  if (billMarkedPaid) {
-    await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.status_changed', entityType: 'bill', entityId: billId, details: { from: 'Received', to: 'Paid', paymentId, paymentDate: p.payment_date } });
-  }
   return new ApiResponse(201, {
     payment: {
       id: p.id, paymentDate: p.payment_date, amountPaid: Number(p.amount_paid),
