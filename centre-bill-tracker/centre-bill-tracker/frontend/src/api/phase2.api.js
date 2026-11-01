@@ -6,6 +6,7 @@ export const getBreakdown = (billId) => unwrap(axiosClient.get(`/phase2/bills/${
 export const saveBreakdown = (billId, items) => unwrap(axiosClient.put(`/phase2/bills/${billId}/breakdown`, { items }));
 export const getPayments = (billId) => unwrap(axiosClient.get(`/phase2/bills/${billId}/payments`));
 export const recordPayment = (billId, payment) => unwrap(axiosClient.post(`/phase2/bills/${billId}/payments`, payment));
+export const updatePaymentReconciliation = (billId, paymentId, reconciliationStatus) => unwrap(axiosClient.patch(`/phase2/bills/${billId}/payments/${paymentId}/reconciliation`, { reconciliationStatus }));
 export const getAttachments = (billId) => unwrap(axiosClient.get(`/phase2/bills/${billId}/attachments`));
 export const uploadAttachment = (billId, file) => {
   const formData = new FormData();

@@ -22,6 +22,7 @@ router.get('/bills/:id/breakdown', phase2Controller.getBreakdown);
 router.put('/bills/:id/breakdown', phase2Controller.saveBreakdown);
 router.get('/bills/:id/payments', phase2Controller.listPayments);
 router.post('/bills/:id/payments', phase2Controller.createPayment);
+router.patch('/bills/:id/payments/:paymentId/reconciliation', phase2Controller.updatePaymentReconciliation);
 router.get('/bills/:id/attachments', phase2Controller.listAttachments);
 router.post('/bills/:id/attachments', upload.single('invoice'), phase2Controller.uploadAttachment);
 router.get('/bills/:id/attachments/:attachmentId', phase2Controller.downloadAttachment);
