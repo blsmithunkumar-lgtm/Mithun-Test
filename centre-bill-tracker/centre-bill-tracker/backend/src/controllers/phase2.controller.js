@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const { toPaise, paymentFitsOutstanding } = require('../utils/finance');
+const { validateInvoiceFile } = require('../utils/invoiceFile');
 
 const CATEGORIES = ['Base Amount', 'Internet', 'Static IP', 'Late Fee', 'GST'];
 const PAYMENT_METHODS = ['Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Other'];
@@ -277,15 +278,8 @@ const listAttachments = asyncHandler(async (req, res) => {
 
 const uploadAttachment = asyncHandler(async (req, res) => {
   await requireBill(req.params.id);
-  if (!req.file) throw ApiError.badRequest('Choose a PDF or image file to upload.');
-  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
-  if (!allowed.includes(req.file.mimetype)) throw ApiError.badRequest('Only PDF, JPG, PNG, or WEBP invoices are supported.');
-  const bytes = req.file.buffer;
-  const signatureValid = req.file.mimetype === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-'
-    : req.file.mimetype === 'image/jpeg' ? bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
-      : req.file.mimetype === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-        : bytes.length >= 12 && bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP';
-  if (!signatureValid) throw ApiError.badRequest('The uploaded file content does not match its file type.');
+  const fileError = validateInvoiceFile(req.file);
+  if (fileError) throw ApiError.badRequest(fileError);
   const [result] = await pool.execute(
     `INSERT INTO bill_attachments
      (bill_id, original_filename, mime_type, file_size, file_data, uploaded_by)
@@ -427,6 +421,33 @@ const reviewApproval = asyncHandler(async (req, res) => {
   return getApproval(req, res);
 });
 
+const getFinanceSummary = asyncHandler(async (req, res) => {
+  const [[billTotals]] = await pool.execute(
+    `SELECT COUNT(*) AS total_bills, COALESCE(SUM(amount), 0) AS total_billed
+       FROM bills`,
+  );
+  const [[paymentTotals]] = await pool.execute(
+    `SELECT COALESCE(SUM(amount_paid), 0) AS amount_paid,
+            COALESCE(SUM(tds_amount), 0) AS tds_amount,
+            COALESCE(SUM(amount_paid + tds_amount), 0) AS settled_amount
+       FROM bill_payments`,
+  );
+  const [categoryRows] = await pool.execute(
+    `SELECT category, COALESCE(SUM(amount), 0) AS amount
+       FROM bill_items GROUP BY category ORDER BY FIELD(category, ?, ?, ?, ?, ?)`,
+    CATEGORIES,
+  );
+  const totalBilled = Number(billTotals.total_billed);
+  const amountPaid = Number(paymentTotals.amount_paid);
+  const tdsAmount = Number(paymentTotals.tds_amount);
+  const settledAmount = Number(paymentTotals.settled_amount);
+  return new ApiResponse(200, {
+    totalBills: Number(billTotals.total_bills), totalBilled, amountPaid, tdsAmount,
+    settledAmount, outstandingBalance: Math.max(0, totalBilled - settledAmount),
+    categories: categoryRows.map((row) => ({ category: row.category, amount: Number(row.amount) })),
+  }).send(res);
+});
+
 const exportPaymentsCsv = asyncHandler(async (req, res) => {
   const [rows] = await pool.execute(
     `SELECT c.centre_name, b.invoice_number, b.bill_month, b.amount AS bill_amount,
@@ -508,4 +529,4 @@ const listBillAuditLogs = asyncHandler(async (req, res) => {
   })) }).send(res);
 });
 
-module.exports = { exportBillReportCsv, listBillAuditLogs, getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
+module.exports = { getFinanceSummary, exportBillReportCsv, listBillAuditLogs, getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };

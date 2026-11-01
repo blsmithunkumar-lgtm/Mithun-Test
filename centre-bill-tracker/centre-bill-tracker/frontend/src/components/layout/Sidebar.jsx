@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const NAV_ITEMS = [
@@ -30,10 +30,18 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  { to: '/finance?section=payments', label: 'Payment Tracker', icon: <span>₹</span> },
+  { to: '/finance?section=invoices', label: 'Invoice Uploads', icon: <span>▤</span> },
+  { to: '/finance?section=reports', label: 'Finance Reports', icon: <span>▥</span> },
+  { to: '/finance?section=tds', label: 'TDS & Reconciliation', icon: <span>%</span> },
+  { to: '/finance?section=amortization', label: 'Amortization', icon: <span>◷</span> },
+  { to: '/finance?section=approvals', label: 'Approvals', icon: <span>✓</span> },
+  { to: '/finance?section=audit', label: 'Audit Logs', adminOnly: true, icon: <span>≡</span> },
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
   const { isAdmin } = useAuth();
+  const location = useLocation();
   const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
@@ -67,7 +75,7 @@ export default function Sidebar({ isOpen, onClose }) {
               onClick={onClose}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
+                  (isActive && (!item.to.includes('?') || location.search === item.to.slice(item.to.indexOf('?'))))
                     ? 'bg-brand-50 text-brand-500'
                     : 'text-ink-500 hover:bg-surface-muted hover:text-ink-900'
                 }`

@@ -15,6 +15,7 @@ const upload = multer({
 });
 
 router.use(authenticate);
+router.get('/reports/summary', phase2Controller.getFinanceSummary);
 router.get('/reports/payments.csv', phase2Controller.exportPaymentsCsv);
 router.get('/reports/bills.csv', phase2Controller.exportBillReportCsv);
 router.get('/bills/:id/breakdown', phase2Controller.getBreakdown);
