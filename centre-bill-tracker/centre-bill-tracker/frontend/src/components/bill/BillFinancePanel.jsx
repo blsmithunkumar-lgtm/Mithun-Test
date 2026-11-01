@@ -17,6 +17,7 @@ export default function BillFinancePanel({ bill, isAdmin }) {
   const [amortizationMonths, setAmortizationMonths] = useState('3');
   const [startMonth, setStartMonth] = useState(today().slice(0, 7));
   const [approval, setApproval] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [requestNote, setRequestNote] = useState('');
   const [reviewNote, setReviewNote] = useState('');
   const [payment, setPayment] = useState({
@@ -31,12 +32,13 @@ export default function BillFinancePanel({ bill, isAdmin }) {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [breakdown, paymentData, attachmentData, amortizationData, approvalData] = await Promise.all([
+      const [breakdown, paymentData, attachmentData, amortizationData, approvalData, auditData] = await Promise.all([
         phase2Api.getBreakdown(bill.id),
         phase2Api.getPayments(bill.id),
         phase2Api.getAttachments(bill.id),
         phase2Api.getAmortization(bill.id),
         phase2Api.getApproval(bill.id),
+        isAdmin ? phase2Api.getAuditLogs(bill.id) : Promise.resolve({ auditLogs: [] }),
       ]);
       setItems(CATEGORIES.map((category) => {
         const found = breakdown.items.find((item) => item.category === category);
@@ -47,10 +49,11 @@ export default function BillFinancePanel({ bill, isAdmin }) {
       setAttachments(attachmentData.attachments);
       setAmortization(amortizationData.schedule);
       setApproval(approvalData.approval);
+      setAuditLogs(auditData.auditLogs || []);
     } catch (err) {
       setError(err.message || 'Unable to load bill finance details.');
     }
-  }, [bill.id]);
+  }, [bill.id, isAdmin]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -236,6 +239,26 @@ export default function BillFinancePanel({ bill, isAdmin }) {
       </section>
 
       <section className="rounded-lg border border-surface-border p-4">
+        {isAdmin && (
+          <section className="rounded-lg border border-surface-border p-4">
+            <h3 className="mb-3 font-display font-semibold text-ink-900">Audit trail</h3>
+            {auditLogs.length ? (
+              <ol className="space-y-3">
+                {auditLogs.map((entry) => (
+                  <li key={entry.id} className="border-l-2 border-surface-border pl-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-ink-900">{entry.action.replaceAll('.', ' ')}</span>
+                      <time className="text-xs text-ink-500">{new Date(entry.createdAt).toLocaleString()}</time>
+                    </div>
+                    <p className="text-xs text-ink-500">By {entry.actorName}{entry.actorUsername ? ` (@${entry.actorUsername})` : ''}</p>
+                    {entry.details && <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-words text-xs text-ink-600">{JSON.stringify(typeof entry.details === 'string' ? JSON.parse(entry.details) : entry.details, null, 2)}</pre>}
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="text-sm text-ink-500">No audit events recorded yet.</p>}
+          </section>
+        )}
+
         <h3 className="mb-3 font-display font-semibold text-ink-900">Invoice files</h3>
         <p className="mb-3 text-xs text-ink-500">PDF, JPG, PNG or WEBP; maximum 4 MB per file.</p>
         <form onSubmit={uploadInvoice} className="flex flex-col gap-3 sm:flex-row sm:items-center">

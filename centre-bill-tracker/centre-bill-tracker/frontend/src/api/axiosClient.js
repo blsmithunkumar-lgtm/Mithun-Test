@@ -7,24 +7,42 @@ const axiosClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach the JWT (if present) to every outgoing request.
+// Login must be independent of any token left behind by an old browser session.
+// A stale Authorization header should never interfere with a fresh sign-in.
 axiosClient.interceptors.request.use((config) => {
+  const isLoginRequest = /\/auth\/login\/?$/.test(config.url || '');
+  if (isLoginRequest) {
+    if (config.headers) delete config.headers.Authorization;
+    return config;
+  }
+
   const token = localStorage.getItem('cbt_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else if (config.headers) {
+    delete config.headers.Authorization;
   }
   return config;
 });
 
-// Normalize error shape and force a logout on 401 (expired/invalid session).
+// Normalize API errors while distinguishing server responses from browser-level
+// failures such as CORS, offline connections, DNS, or blocked requests.
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    const message = error.response?.data?.message || 'Something went wrong. Please try again.';
+    const serverMessage = error.response?.data?.message;
+    let message = serverMessage || 'Something went wrong. Please try again.';
     const fieldErrors = error.response?.data?.errors || [];
 
-    if (status === 401) {
+    if (!error.response) {
+      message = 'Cannot reach the server. Check your connection or try again shortly.';
+    } else if (status >= 500) {
+      message = serverMessage || 'The server is temporarily unavailable. Please try again shortly.';
+    }
+
+    // Clear expired/invalid sessions, but never redirect a failed login request.
+    if (status === 401 && !/\/auth\/login\/?$/.test(error.config?.url || '')) {
       localStorage.removeItem('cbt_token');
       localStorage.removeItem('cbt_user');
       if (window.location.pathname !== '/login') {
