@@ -396,6 +396,11 @@ const saveAmortization = asyncHandler(async (req, res) => {
         [billId, entry.month, entry.amount.toFixed(2), req.user.id],
       );
     }
+    await writeAuditLog({
+      executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+      action: 'bill.amortization_updated', entityType: 'bill_amortization', entityId: billId,
+      details: { months, startMonth, schedule },
+    });
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -403,7 +408,6 @@ const saveAmortization = asyncHandler(async (req, res) => {
   } finally {
     connection.release();
   }
-  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.amortization_updated', entityType: 'bill_amortization', entityId: billId, details: { months, startMonth, schedule } });
   return getAmortization(req, res);
 });
 
