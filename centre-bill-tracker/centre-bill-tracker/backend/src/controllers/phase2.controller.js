@@ -264,6 +264,46 @@ const createPayment = asyncHandler(async (req, res) => {
   }, 'Payment recorded successfully').send(res);
 });
 
+const updatePaymentReconciliation = asyncHandler(async (req, res) => {
+  const billId = Number(req.params.id);
+  const paymentId = Number(req.params.paymentId);
+  const { reconciliationStatus } = req.body;
+  if (!Number.isSafeInteger(paymentId) || paymentId <= 0) throw ApiError.badRequest('Invalid payment ID.');
+  if (!RECONCILIATION.includes(reconciliationStatus)) throw ApiError.badRequest('Invalid reconciliation status.');
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      'SELECT id, reconciliation_status FROM bill_payments WHERE id = ? AND bill_id = ? FOR UPDATE',
+      [paymentId, billId],
+    );
+    if (!rows.length) throw ApiError.notFound('Payment not found for this bill.');
+    const previousStatus = rows[0].reconciliation_status;
+    if (previousStatus !== reconciliationStatus) {
+      await connection.execute(
+        'UPDATE bill_payments SET reconciliation_status = ? WHERE id = ? AND bill_id = ?',
+        [reconciliationStatus, paymentId, billId],
+      );
+      await writeAuditLog({
+        executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+        action: 'payment.reconciliation_updated', entityType: 'bill_payment', entityId: paymentId,
+        details: { from: previousStatus, to: reconciliationStatus },
+      });
+    }
+    await connection.commit();
+    return new ApiResponse(200, {
+      paymentId, reconciliationStatus,
+      message: previousStatus === reconciliationStatus ? 'Reconciliation status unchanged.' : 'Reconciliation status updated.',
+    }).send(res);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+});
+
 const listAttachments = asyncHandler(async (req, res) => {
   await requireBill(req.params.id);
   const [rows] = await pool.execute(
@@ -539,4 +579,4 @@ const listBillAuditLogs = asyncHandler(async (req, res) => {
   })) }).send(res);
 });
 
-module.exports = { getFinanceSummary, exportBillReportCsv, listBillAuditLogs, getBreakdown, saveBreakdown, listPayments, createPayment, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
+module.exports = { getFinanceSummary, exportBillReportCsv, listBillAuditLogs, getBreakdown, saveBreakdown, listPayments, createPayment, updatePaymentReconciliation, listAttachments, uploadAttachment, downloadAttachment, getAmortization, saveAmortization, getApproval, requestApproval, reviewApproval, exportPaymentsCsv };
