@@ -222,6 +222,20 @@ const createPayment = asyncHandler(async (req, res) => {
       if (!statusUpdate.affectedRows) throw ApiError.conflict('Bill status changed while recording the final payment.');
       billMarkedPaid = true;
     }
+    // Persist finance audit events in the same transaction as the payment.
+    // If audit storage fails, the payment and status change are rolled back too.
+    await writeAuditLog({
+      executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+      action: 'payment.recorded', entityType: 'bill_payment', entityId: paymentId,
+      details: { amountPaid: paid, tdsAmount: tds, paymentDate, paymentMethod },
+    });
+    if (billMarkedPaid) {
+      await writeAuditLog({
+        executor: connection, throwOnError: true, billId, actorUserId: req.user.id,
+        action: 'bill.status_changed', entityType: 'bill', entityId: billId,
+        details: { from: 'Received', to: 'Paid', paymentId, paymentDate },
+      });
+    }
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -238,10 +252,6 @@ const createPayment = asyncHandler(async (req, res) => {
     [paymentId],
   );
   const p = rows[0];
-  await writeAuditLog({ billId, actorUserId: req.user.id, action: 'payment.recorded', entityType: 'bill_payment', entityId: paymentId, details: { amountPaid: Number(p.amount_paid), tdsAmount: Number(p.tds_amount), paymentDate: p.payment_date, paymentMethod: p.payment_method } });
-  if (billMarkedPaid) {
-    await writeAuditLog({ billId, actorUserId: req.user.id, action: 'bill.status_changed', entityType: 'bill', entityId: billId, details: { from: 'Received', to: 'Paid', paymentId, paymentDate: p.payment_date } });
-  }
   return new ApiResponse(201, {
     payment: {
       id: p.id, paymentDate: p.payment_date, amountPaid: Number(p.amount_paid),
